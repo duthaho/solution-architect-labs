@@ -1,0 +1,39 @@
+services:
+  mysql:
+    image: mysql:8.0.43
+    container_name: lab02-mysql
+    command:
+      # Row-based binlog with full row images + full metadata is the contract
+      # this whole migration depends on. 8.0 defaults give us log_bin=ON and
+      # binlog_format=ROW already; we pin the rest explicitly.
+      - --server-id=1
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --binlog-row-metadata=FULL          # column NAMES in binlog events (needed by the applier)
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=1G
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+      - MYSQL_DATABASE=lab02
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: lab02-adminer
+    profiles: ["ui"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysqldata:

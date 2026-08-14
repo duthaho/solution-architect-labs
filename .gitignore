@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 journal.jsonl
+migration_state.json
 traffic.pid
 traffic.log

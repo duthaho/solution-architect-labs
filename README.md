@@ -18,7 +18,7 @@ Each lab is **not a toy demo**. Every lab ships with:
 | # | Lab | Problem | Status |
 |---|-----|---------|--------|
 | 01 | [Elasticsearch zero-downtime reindex](labs/01-es-zero-downtime-reindex/) | Change the mapping of a large live index with continuous writes, zero read downtime, and zero data loss | ✅ Ready |
-| 02 | MySQL online migration of a big table | ALTER a 100M+ row table under traffic (gh-ost-style: chunked backfill, binlog catch-up, atomic cutover) | 🔜 Planned |
+| 02 | [MySQL online migration of a big table](labs/02-mysql-online-migration/) | ALTER a 100M+ row table under traffic (gh-ost-style: chunked backfill, binlog catch-up, atomic cutover) | ✅ Ready |
 | 03 | Sync big data between two datasources | CDC with Debezium/Kafka: MySQL → Elasticsearch, ordering, delivery guarantees, reconciliation | 🔜 Planned |
 | 04 | Deploy with no data gap and no downtime | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows | 🔜 Planned |
 | 05 | Idempotent event processing at scale | Exactly-once illusion: dedupe keys, outbox pattern, consumer offsets | 🔜 Planned |
