@@ -1,0 +1,20 @@
+{
+  "settings": {
+    "number_of_shards": 2,
+    "number_of_replicas": 0
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "sku":        { "type": "text" },
+      "name":       { "type": "text" },
+      "description":{ "type": "text" },
+      "category":   { "type": "keyword" },
+      "tags":       { "type": "keyword" },
+      "price":      { "type": "float" },
+      "stock":      { "type": "integer" },
+      "is_deleted": { "type": "boolean" },
+      "updated_at": { "type": "date", "format": "epoch_millis" }
+    }
+  }
+}
