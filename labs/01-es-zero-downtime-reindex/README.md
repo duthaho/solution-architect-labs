@@ -259,7 +259,127 @@ Everything that changes between this lab and 500M docs on a real cluster:
 7. Why `refresh_interval=-1` and `replicas=0` during the copy — and what is
    the risk of `replicas=0` if a node dies mid-migration?
 
-## 7. File map
+## 7. FAQ deep dive — one alias vs. two
+
+*This section grew out of real questions asked while building the lab. They are
+exactly the questions a good reviewer will ask about your design.*
+
+### Q1. Why two aliases? My application uses a single alias.
+
+Honest answer first: **for the cutover strategy in this lab, one alias is
+enough.** Both aliases always move together in the same atomic `_aliases`
+call, so a single alias would behave identically:
+
+```python
+es.indices.update_aliases(actions=[
+    {"remove": {"index": "products_v1", "alias": "products"}},
+    {"add":    {"index": "products_v2", "alias": "products"}},
+])  # still atomic
+```
+
+Two aliases are not required for *this* migration — they are **option value**:
+they let you express intermediate states where the read target and write
+target differ. One alias has exactly two states (`→ v1` or `→ v2`); two
+aliases turn the migration into a state machine:
+
+| Phase | `products-read` | `products-write` | Why you'd want it |
+|---|---|---|---|
+| Normal | v1 | v1 | |
+| **Read-first cutover** | **v2** | v1 (+ catch-up loop) | Soak v2 under real search traffic — latency, relevance, mapping bugs — while reverting reads stays a free one-call operation |
+| Cutover complete | v2 | v2 | |
+| **Reads-only rollback** | v1 | v2 | v2 serves bad/slow results but data is fine: rescue UX instantly, no reverse catch-up needed |
+
+The read-first phase is the valuable one. Real ES migration incidents are
+rarely lost data — they are *search quality* regressions on the new mapping
+(wrong analyzer, relevance drop, latency blow-up from edge-ngrams), and those
+only surface under real read traffic. With one alias, the first moment v2
+sees real reads is also the moment you are all-in.
+
+### Q2. If I use one alias, do the migration steps change?
+
+No. Baseline copy, catch-up loop, convergence check, write block, final pass,
+atomic swap, verification, rollback — all identical. The only difference is
+swapping one alias instead of two. What you give up is the intermediate
+states in the table above, not safety of the big-bang path.
+
+### Q3. Doesn't two aliases force complex if/else routing in the app?
+
+No — this is the common misconception. Routing does not depend on any runtime
+condition; it depends on the **operation type**, which is known statically at
+the call site. `search`/`mget`/`count` are always reads; `index`/`update`/
+`delete` are always writes. There is no branch to write — it is **two config
+constants instead of one**, applied in the repository layer you (should)
+already have:
+
+```python
+class ProductRepo:
+    def search(self, query):
+        return es.search(index=ES_READ_ALIAS, query=query)
+
+    def save(self, doc_id, doc):
+        return es.index(index=ES_WRITE_ALIAS, id=doc_id, document=doc)
+```
+
+This is the same shape as database read-replica routing: nobody writes
+if/else for primary-vs-replica either — write repos point at the primary,
+read repos at the replica.
+
+### Q4. Full trade-off analysis
+
+**What two aliases buy you:**
+
+1. **Cutover as a state machine** (Q1) — read-first canary, gradual rollout.
+2. **Rollback granularity** — revert reads without reverse-syncing writes.
+3. **Read-side filters and fan-out** — a read alias can carry a filter (e.g.
+   `is_deleted: false`, making soft-delete invisibility an infrastructure
+   concern instead of a per-query one) and can span multiple indices
+   (time-based pattern: `logs-read` → 12 monthly indices, `logs-write` → the
+   current one). Both are possible with one alias but semantically trappy:
+   writes through a filtered alias silently ignore the filter, and writes
+   through a multi-index alias are rejected unless `is_write_index` is set.
+4. **Least privilege** — search service gets read-alias permissions only,
+   ingest workers write-alias only. A compromised search path cannot corrupt
+   data.
+5. **Observability** — slow logs and metrics split cleanly by path.
+
+**What two aliases cost you (the honest list):**
+
+1. **Silent misroute risk — the dangerous one.** If a developer writes
+   `es.index(index=READ_ALIAS, ...)`, ES *accepts it* (writing through a
+   single-index alias works). The bug runs correctly for months and detonates
+   mid-migration, the moment the two aliases point at different indices.
+   Antidotes: (a) split permissions so misroutes fail on day one, (b) funnel
+   all ES access through one repository layer and lint against direct client
+   use, (c) in tests, point the read alias at two indices so writes through
+   it fail fast.
+2. **Permanent cognitive overhead.** Every call site picks one of two
+   constants; every new engineer asks why. Small, but multiplied by codebase
+   lifetime.
+3. **Framework friction.** Spring Data ES and some ODMs accept a single
+   `indexName` per entity. Forcing two aliases through them costs you
+   framework convenience — *this* is where real complexity appears, not in
+   routing logic.
+4. **Phantom flexibility.** If you never canary, never split permissions,
+   never fan out — you prepaid for an option you never exercise.
+
+**Decision matrix:**
+
+| Context | Recommendation |
+|---|---|
+| Small/medium index, rare migrations, seconds of write-block acceptable | **1 alias** — don't pay for options you won't use |
+| Search is a revenue path, frequent mapping changes, need canary/soak | **2 aliases** |
+| Multi-tenant / security-sensitive, least privilege required | **2 aliases** (permissions alone justify it) |
+| Framework hard-codes one index name | **1 alias**, unless security forces the issue |
+| No repository layer around ES yet | Build that first — it's the prerequisite that makes 2 aliases cheap |
+
+**The verdict that matters:** the load-bearing decision is *alias instead of
+concrete index name* — that one cannot be deferred. Going from one alias to
+two later is a reversible, low-cost migration (add the new alias pointing at
+the same index, flip constants call-site by call-site) — **provided** all ES
+access goes through a single repository layer. That discipline is what keeps
+today's simple choice from locking you in tomorrow.
+
+## 8. File map
 
 ```
 docker-compose.yml     ES 8.14 single node (+ kibana under --profile ui)
