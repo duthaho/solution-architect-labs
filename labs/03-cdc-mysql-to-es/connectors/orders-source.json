@@ -1,0 +1,24 @@
+{
+  "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+  "database.hostname": "mysql",
+  "database.port": "3306",
+  "database.user": "root",
+  "database.password": "lab",
+  "database.server.id": "5400",
+  "topic.prefix": "lab03",
+  "database.include.list": "lab03",
+  "table.include.list": "lab03.orders",
+
+  "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+  "schema.history.internal.kafka.topic": "_schema_history.lab03",
+
+  "snapshot.mode": "initial",
+
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false",
+
+  "decimal.handling.mode": "string",
+  "tombstones.on.delete": "true"
+}
