@@ -11,3 +11,11 @@ router.json
 timeline.json
 results.jsonl
 zombie-traffic.log
+router_state.json
+repair_queue.jsonl
+shadow_diffs.jsonl
+backfill_state.json
+inject_state.json
+backfill.pid
+backfill.log
+demo.log

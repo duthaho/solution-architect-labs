@@ -1,0 +1,66 @@
+services:
+  # The overloaded monolith: source of truth at the start of the ladder.
+  mono:
+    image: mysql:8.0.43
+    container_name: lab06-mono
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=512M
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+      - MYSQL_DATABASE=lab06
+    ports:
+      - "${MONO_PORT:-3312}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - monodata:/var/lib/mysql
+
+  # The two shards. Deliberately plain MySQL: sharding lives in the app-side
+  # router (scripts/common.py), not in the database — same as Vitess before
+  # Vitess existed.
+  shard0:
+    image: mysql:8.0.43
+    container_name: lab06-shard0
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=256M
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+      - MYSQL_DATABASE=lab06
+    ports:
+      - "${SHARD0_PORT:-3313}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - shard0data:/var/lib/mysql
+
+  shard1:
+    image: mysql:8.0.43
+    container_name: lab06-shard1
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=256M
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+      - MYSQL_DATABASE=lab06
+    ports:
+      - "${SHARD1_PORT:-3314}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - shard1data:/var/lib/mysql
+
+volumes:
+  monodata:
+  shard0data:
+  shard1data:
