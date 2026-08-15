@@ -1,0 +1,99 @@
+# Three MySQL 8.0 nodes. All three get identical replication-grade config and
+# both semisync plugins loaded (roles swap during the lab, so every node must be
+# able to act as source or replica). The differences:
+#
+#   - server-id (must be unique)
+#   - replicas get read_only + super_read_only via SET PERSIST in bootstrap.py
+#     (not via boot flags: the docker entrypoint's first-boot init can't run
+#     under super-read-only). PERSIST survives restarts — a replica that
+#     restarts must never silently accept writes; that IS fencing done right.
+#   - the primary stays writable (which is exactly what makes the zombie drill
+#     interesting: when it comes back from the dead it is UNFENCED)
+#
+# sync_binlog=1 + innodb_flush_log_at_trx_commit=1 everywhere: we SIGKILL the
+# primary process, so the host's disk state survives the crash. Any lost row is
+# therefore lost by *replication*, not by fsync laziness — the measurement stays
+# honest.
+
+x-mysql-common: &mysql-common
+  image: mysql:8.0.43
+  environment:
+    - MYSQL_ROOT_PASSWORD=lab
+    - MYSQL_DATABASE=lab04
+  healthcheck:
+    test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+    interval: 5s
+    timeout: 5s
+    retries: 60
+
+services:
+  primary:
+    <<: *mysql-common
+    container_name: lab04-primary
+    command:
+      - --server-id=1
+      - --report-host=primary
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON      # keep a full binlog on every node: needed for promotion + zombie rebuild-by-replay
+      - --binlog-format=ROW
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --plugin-load-add=rpl_semi_sync_source=semisync_source.so
+      - --plugin-load-add=rpl_semi_sync_replica=semisync_replica.so
+      - --plugin-load-add=clone=mysql_clone.so
+      - --default-authentication-plugin=mysql_native_password
+      - --skip-name-resolve
+    ports:
+      - "3307:3306"
+    volumes:
+      - primarydata:/var/lib/mysql
+
+  replica1:
+    <<: *mysql-common
+    container_name: lab04-replica1
+    command:
+      - --server-id=2
+      - --report-host=replica1
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --binlog-format=ROW
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --plugin-load-add=rpl_semi_sync_source=semisync_source.so
+      - --plugin-load-add=rpl_semi_sync_replica=semisync_replica.so
+      - --plugin-load-add=clone=mysql_clone.so
+      - --default-authentication-plugin=mysql_native_password
+      - --skip-name-resolve
+    ports:
+      - "3308:3306"
+    volumes:
+      - replica1data:/var/lib/mysql
+
+  replica2:
+    <<: *mysql-common
+    container_name: lab04-replica2
+    command:
+      - --server-id=3
+      - --report-host=replica2
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --binlog-format=ROW
+      - --sync-binlog=1
+      - --innodb-flush-log-at-trx-commit=1
+      - --plugin-load-add=rpl_semi_sync_source=semisync_source.so
+      - --plugin-load-add=rpl_semi_sync_replica=semisync_replica.so
+      - --plugin-load-add=clone=mysql_clone.so
+      - --default-authentication-plugin=mysql_native_password
+      - --skip-name-resolve
+    ports:
+      - "3309:3306"
+    volumes:
+      - replica2data:/var/lib/mysql
+
+volumes:
+  primarydata:
+  replica1data:
+  replica2data:

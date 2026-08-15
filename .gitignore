@@ -7,3 +7,7 @@ traffic.pid
 traffic.log
 projector.pid
 projector.log
+router.json
+timeline.json
+results.jsonl
+zombie-traffic.log

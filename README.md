@@ -20,7 +20,7 @@ Each lab is **not a toy demo**. Every lab ships with:
 | 01 | [Elasticsearch zero-downtime reindex](labs/01-es-zero-downtime-reindex/) | Change the mapping of a large live index with continuous writes, zero read downtime, and zero data loss | ✅ Ready |
 | 02 | [MySQL online migration of a big table](labs/02-mysql-online-migration/) | ALTER a 100M+ row table under traffic (gh-ost-style: chunked backfill, binlog catch-up, atomic cutover) | ✅ Ready |
 | 03 | [Sync big data between two datasources](labs/03-cdc-mysql-to-es/) | CDC with Debezium/Kafka: MySQL → Elasticsearch, ordering, delivery guarantees, reconciliation | ✅ Ready |
-| 04 | [MySQL failover drill: measure the data-loss window](labs/04-mysql-failover-drill/) | Kill the primary under live writes, promote a replica by GTID, measure acked-but-lost rows (RPO), semi-sync, fencing, split-brain | 📝 Planned |
+| 04 | [MySQL failover drill: measure the data-loss window](labs/04-mysql-failover-drill/) | Kill the primary under live writes, promote a replica by GTID, measure acked-but-lost rows (RPO), semi-sync, fencing, split-brain | ✅ Ready |
 | 05 | [Distributed locks are a lie: fencing tokens](labs/05-fencing-tokens/) | Reproduce Kleppmann's lock-corruption scenario deterministically (SIGSTOP past TTL), fix with storage-enforced fencing tokens | 📝 Planned |
 | 06 | [Live resharding under traffic](labs/06-live-resharding/) | Split one big table into N shards with zero downtime: double-write, per-shard backfill, shadow reads, atomic cutover, rollback | 📝 Planned |
 | 07 | [Cache consistency: the stale-set race](labs/07-cache-consistency/) | Deterministically reproduce cache-aside races and thundering herd; compare TTL vs delete-on-write vs versioned keys vs CDC invalidation | 📝 Planned |
