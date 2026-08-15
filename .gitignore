@@ -19,3 +19,10 @@ inject_state.json
 backfill.pid
 backfill.log
 demo.log
+journal_writes.jsonl
+journal_reads.jsonl
+journal_cdc_lag.jsonl
+audit_summary.json
+herd_summary.json
+invalidator.pid
+invalidator.log

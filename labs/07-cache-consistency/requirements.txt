@@ -1,0 +1,3 @@
+PyMySQL==1.1.1
+redis==5.0.8
+confluent-kafka==2.5.0

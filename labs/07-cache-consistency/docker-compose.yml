@@ -1,0 +1,103 @@
+services:
+  mysql:
+    image: mysql:8.0.43
+    container_name: lab07-mysql
+    command:
+      # Binlog contract identical to lab 03: the cdc profile's Debezium needs
+      # ROW format with FULL row images. Costs nothing for the base drills.
+      - --server-id=1
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=256M
+      # drill-herd points 200 concurrent clients at this DB on purpose;
+      # default max_connections (151) would turn the drill into a conn-error
+      # demo instead of a load demo.
+      - --max-connections=1000
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+      - MYSQL_DATABASE=lab07
+    ports:
+      - "${MYSQL_PORT:-3315}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+  redis:
+    image: redis:7.4.1
+    container_name: lab07-redis
+    # No persistence: a cache that survives restarts with stale data is a bug,
+    # not a feature. An empty cache after restart is always safe (cold != wrong).
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT:-6381}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  # ---- cdc profile: only for drill-cdc, so the base drills stay light -------
+
+  kafka:
+    image: apache/kafka:3.7.2
+    container_name: lab07-kafka
+    profiles: [cdc]
+    environment:
+      # Single-node KRaft; two data listeners (container-net + host), the same
+      # advertised-listener setup as lab 03. Host port 29093 so labs 03 and 07
+      # can coexist.
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:${KAFKA_PORT:-29093}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    ports:
+      - "${KAFKA_PORT:-29093}:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+
+  connect:
+    image: quay.io/debezium/connect:2.7
+    container_name: lab07-connect
+    profiles: [cdc]
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: lab07-connect
+      CONFIG_STORAGE_TOPIC: _connect_configs
+      OFFSET_STORAGE_TOPIC: _connect_offsets
+      STATUS_STORAGE_TOPIC: _connect_status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx768m
+    ports:
+      - "${CONNECT_PORT:-8084}:8083"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8083/connectors || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  mysqldata:
