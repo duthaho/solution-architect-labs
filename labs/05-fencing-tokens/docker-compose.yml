@@ -1,0 +1,47 @@
+# The smallest infra of the series, on purpose:
+#
+#   - redis     = the lock service (host port 6380 to avoid clashing with a local redis)
+#   - storage   = the resource the lock is supposed to protect: an append-only
+#                 ledger behind HTTP. FENCING=on|off decides whether it enforces
+#                 fencing tokens (reject token < max_seen with 409).
+#   - worker    = template service; drills launch it as lab05-worker-a /
+#                 lab05-worker-b via `docker compose run`. Workers run as PID 1
+#                 of their container so `docker kill -s STOP/CONT` freezes
+#                 exactly the process we mean to freeze — a deterministic stand-in
+#                 for a GC pause / VM stall / stolen CPU.
+#
+# The drills recreate `storage` per scenario (fresh ledger, right FENCING mode),
+# so you rarely touch this file directly.
+
+services:
+  redis:
+    image: redis:7.4.1
+    container_name: lab05-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  storage:
+    build: .
+    container_name: lab05-storage
+    command: ["python", "scripts/storage.py", "--fencing", "${FENCING:-off}"]
+    ports:
+      - "8091:8091"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    build: .
+    profiles: ["manual"]          # never started by `docker compose up`; drills `compose run` it
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_URL=http://storage:8091
+    command: ["python", "scripts/worker.py", "--help"]
