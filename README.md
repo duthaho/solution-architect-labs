@@ -24,7 +24,7 @@ Each lab is **not a toy demo**. Every lab ships with:
 | 05 | [Distributed locks are a lie: fencing tokens](labs/05-fencing-tokens/) | Reproduce Kleppmann's lock-corruption scenario deterministically (SIGSTOP past TTL), fix with storage-enforced fencing tokens | ✅ Ready |
 | 06 | [Live resharding under traffic](labs/06-live-resharding/) | Split one big table into N shards with zero downtime: double-write, per-shard backfill, shadow reads, atomic cutover, rollback | ✅ Ready |
 | 07 | [Cache consistency: the stale-set race](labs/07-cache-consistency/) | Deterministically reproduce cache-aside races and thundering herd; compare TTL vs delete-on-write vs versioned keys vs CDC invalidation | ✅ Ready |
-| 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | 📝 Planned |
+| 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | ✅ Ready |
 | 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | 📝 Planned |
 
 Each 📝 Planned lab has a `PLAN.md` in its folder: the full design (architecture,

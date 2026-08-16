@@ -26,3 +26,8 @@ audit_summary.json
 herd_summary.json
 invalidator.pid
 invalidator.log
+audit.json
+chaos.pid
+chaos.log
+relay.pid
+relay.log
