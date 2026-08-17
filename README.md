@@ -25,11 +25,7 @@ Each lab is **not a toy demo**. Every lab ships with:
 | 06 | [Live resharding under traffic](labs/06-live-resharding/) | Split one big table into N shards with zero downtime: double-write, per-shard backfill, shadow reads, atomic cutover, rollback | ✅ Ready |
 | 07 | [Cache consistency: the stale-set race](labs/07-cache-consistency/) | Deterministically reproduce cache-aside races and thundering herd; compare TTL vs delete-on-write vs versioned keys vs CDC invalidation | ✅ Ready |
 | 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | ✅ Ready |
-| 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | 📝 Planned |
-
-Each 📝 Planned lab has a `PLAN.md` in its folder: the full design (architecture,
-drills, Makefile targets) plus checkbox milestones. To build one, open its `PLAN.md`
-and start at the first unchecked milestone.
+| 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | ✅ Ready |
 
 ## How to use these labs
 

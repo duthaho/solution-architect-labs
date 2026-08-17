@@ -31,3 +31,6 @@ chaos.pid
 chaos.log
 relay.pid
 relay.log
+client_journal.jsonl
+client_state.json
+labs/09-expand-contract-deploy/state/
