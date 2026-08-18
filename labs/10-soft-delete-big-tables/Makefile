@@ -96,3 +96,40 @@ verify:
 
 bench:
 	$(PY) scripts/bench.py
+
+demo: up install bootstrap seed
+	@echo ""
+	@echo "=== 1. live traffic on all three families ==="
+	$(MAKE) traffic-start FAMILY=a
+	$(MAKE) traffic-start FAMILY=b
+	$(MAKE) traffic-start FAMILY=c
+	@sleep 10
+	@echo ""
+	@echo "=== 2. strategy A: deleted_at column (+ forgotten-WHERE and resurrection drills) ==="
+	$(MAKE) strategy-a
+	@echo ""
+	@echo "=== 3. strategy B: mirror deleted schema (+ restore round-trip) ==="
+	$(MAKE) strategy-b
+	@echo ""
+	@echo "=== 4. strategy C: instant soft delete + background archiver ==="
+	$(MAKE) strategy-c
+	$(MAKE) archiver-drain
+	@echo ""
+	@echo "=== 5. stop traffic ==="
+	$(MAKE) traffic-stop FAMILY=a
+	$(MAKE) traffic-stop FAMILY=b
+	$(MAKE) traffic-stop FAMILY=c
+	@echo ""
+	@echo "=== 6. failure drills ==="
+	$(MAKE) drill-drift
+	$(MAKE) drill-kill-archiver
+	$(MAKE) drill-big-delete
+	@echo ""
+	@echo "=== 7. retention purge (RETENTION_S=0: purge everything archived) ==="
+	RETENTION_S=0 $(MAKE) purge
+	@echo ""
+	@echo "=== 8. verify: exactly-once accounting across journal + outcomes + DB ==="
+	$(MAKE) verify
+	@echo ""
+	@echo "=== 9. benchmark (resets the world, re-seeds, compares all three) ==="
+	$(MAKE) bench
