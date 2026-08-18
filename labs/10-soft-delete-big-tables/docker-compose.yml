@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.0.43
+    container_name: lab10-mysql
+    command:
+      # No binlog tricks needed in this lab — plain InnoDB. A real buffer pool
+      # matters though: the whole point is watching big-table behavior, and a
+      # 128M default pool would turn every measurement into disk noise.
+      - --server-id=1
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=1G
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+    ports:
+      - "${MYSQL_PORT:-3316}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: lab10-adminer
+    profiles: ["ui"]
+    ports:
+      - "8090:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysqldata:
