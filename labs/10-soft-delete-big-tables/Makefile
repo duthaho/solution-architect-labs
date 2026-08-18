@@ -4,7 +4,9 @@ PY := $(VENV)/bin/python
 export SEED_ROWS ?= 500000
 export MYSQL_PORT ?= 3316
 
-.PHONY: help up down clean install bootstrap seed
+FAMILY ?= a
+
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop
 
 help:
 	@echo "Targets:"
@@ -33,3 +35,18 @@ bootstrap:
 
 seed:
 	$(PY) scripts/seed.py
+
+traffic-start:
+	@if [ -f traffic_$(FAMILY).pid ] && kill -0 $$(cat traffic_$(FAMILY).pid) 2>/dev/null; then \
+		echo "traffic[$(FAMILY)] already running (pid $$(cat traffic_$(FAMILY).pid))"; \
+	else \
+		nohup $(PY) scripts/traffic.py $(FAMILY) > traffic_$(FAMILY).log 2>&1 & echo $$! > traffic_$(FAMILY).pid; \
+		echo "traffic[$(FAMILY)] started (pid $$(cat traffic_$(FAMILY).pid), log: traffic_$(FAMILY).log)"; \
+	fi
+
+traffic-stop:
+	@if [ -f traffic_$(FAMILY).pid ]; then \
+		kill -TERM $$(cat traffic_$(FAMILY).pid) 2>/dev/null || true; \
+		sleep 2; rm -f traffic_$(FAMILY).pid; echo "traffic[$(FAMILY)] stopped"; \
+		tail -1 traffic_$(FAMILY).log; \
+	else echo "traffic[$(FAMILY)] not running"; fi

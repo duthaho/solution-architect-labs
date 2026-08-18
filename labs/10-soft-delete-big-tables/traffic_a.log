@@ -1,0 +1,4 @@
+09:08:42 INFO    MySQL is up at 127.0.0.1:3316
+09:08:42 INFO    [a] traffic started (journal: /home/ubuntu/agentkit-workspace/lab/labs/10-soft-delete-big-tables/traffic_a.jsonl)
+09:08:50 INFO    [a] 500 ops journaled
+09:08:52 INFO    [a] traffic stopped: 560 ops journaled
