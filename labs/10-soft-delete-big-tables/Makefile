@@ -6,7 +6,9 @@ export MYSQL_PORT ?= 3316
 
 FAMILY ?= a
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop strategy-a strategy-b drill-drift
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop \
+        strategy-a strategy-b drill-drift strategy-c archiver-drain \
+        archiver-start archiver-stop purge drill-kill-archiver drill-big-delete
 
 help:
 	@echo "Targets:"
@@ -59,3 +61,32 @@ strategy-b:
 
 drill-drift:
 	$(PY) scripts/strategy_b.py drift
+
+strategy-c:
+	$(PY) scripts/archiver.py flag
+
+archiver-drain:
+	$(PY) scripts/archiver.py run --drain
+
+archiver-start:
+	@if [ -f archiver.pid ] && kill -0 $$(cat archiver.pid) 2>/dev/null; then \
+		echo "archiver already running (pid $$(cat archiver.pid))"; \
+	else \
+		nohup $(PY) scripts/archiver.py run > archiver.log 2>&1 & echo $$! > archiver.pid; \
+		echo "archiver started (pid $$(cat archiver.pid), log: archiver.log)"; \
+	fi
+
+archiver-stop:
+	@if [ -f archiver.pid ]; then \
+		kill -TERM $$(cat archiver.pid) 2>/dev/null || true; \
+		sleep 1; rm -f archiver.pid; echo "archiver stopped"; \
+	else echo "archiver not running"; fi
+
+purge:
+	$(PY) scripts/archiver.py purge
+
+drill-kill-archiver:
+	$(PY) scripts/drill_kill_archiver.py
+
+drill-big-delete:
+	$(PY) scripts/drill_big_delete.py

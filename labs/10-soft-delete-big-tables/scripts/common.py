@@ -114,9 +114,11 @@ def count(conn, schema: str, table: str, where: str = "1=1") -> int:
 
 
 def percentiles(samples_ms: list[float]) -> tuple[float, float]:
-    """(p50, p95) in milliseconds."""
+    """(p50, p95) in milliseconds. Degrades gracefully for tiny samples."""
     if not samples_ms:
         return (0.0, 0.0)
+    if len(samples_ms) < 2:
+        return (samples_ms[0], samples_ms[0])
     qs = statistics.quantiles(samples_ms, n=100, method="inclusive")
     return (qs[49], qs[94])
 
