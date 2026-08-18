@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3316
 
 FAMILY ?= a
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop strategy-a
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop strategy-a strategy-b drill-drift
 
 help:
 	@echo "Targets:"
@@ -53,3 +53,9 @@ traffic-stop:
 
 strategy-a:
 	$(PY) scripts/strategy_a.py
+
+strategy-b:
+	$(PY) scripts/strategy_b.py
+
+drill-drift:
+	$(PY) scripts/strategy_b.py drift
