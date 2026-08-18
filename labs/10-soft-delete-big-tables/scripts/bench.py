@@ -39,6 +39,44 @@ DELETE_FNS = {
 READ_FILTER = {"a": "AND deleted_at IS NULL", "b": "", "c": "AND deleted_at IS NULL"}
 
 
+def restore_probe(family: str, conn) -> str:
+    """Actually restore one deleted row per strategy and verify it's visible
+    again. Returns the verified mechanism, or 'FAIL'."""
+    live = FAMILIES[family]["live"]
+    with conn.cursor() as cur:
+        if family == "a":
+            cur.execute(f"SELECT id FROM {live}.orders WHERE deleted_at IS NOT NULL LIMIT 1")
+            row = cur.fetchone()
+            if not row:
+                return "n/a"
+            cur.execute(f"UPDATE {live}.orders SET deleted_at=NULL WHERE id=%s", (row[0],))
+            conn.commit()
+            cur.execute(f"SELECT 1 FROM {live}.orders WHERE id=%s AND deleted_at IS NULL",
+                        (row[0],))
+            return "OK: flip flag" if cur.fetchone() else "FAIL"
+        if family == "b":
+            cur.execute("SELECT id FROM lab10_b_deleted.users LIMIT 1")
+            row = cur.fetchone()
+            if not row:
+                return "n/a"
+            strategy_b.restore_user(conn, row[0])
+            cur.execute(f"SELECT 1 FROM {live}.users WHERE id=%s", (row[0],))
+            return "OK: reverse move" if cur.fetchone() else "FAIL"
+        # c: copy an archived user back to live (users have no FK parent)
+        cur.execute("SELECT id FROM lab10_c_archive.users LIMIT 1")
+        row = cur.fetchone()
+        if not row:
+            return "n/a"
+        cur.execute(f"INSERT INTO {live}.users (id, email, name, created_at) "
+                    f"SELECT id, email, name, created_at FROM lab10_c_archive.users "
+                    f"WHERE id=%s", (row[0],))
+        cur.execute("DELETE FROM lab10_c_archive.users WHERE id=%s", (row[0],))
+        conn.commit()
+        cur.execute(f"SELECT 1 FROM {live}.users WHERE id=%s AND deleted_at IS NULL",
+                    (row[0],))
+        return "OK: copy back" if cur.fetchone() else "FAIL"
+
+
 def run_workload(family: str) -> dict:
     live = FAMILIES[family]["live"]
     other = FAMILIES[family].get("deleted") or FAMILIES[family].get("archive")
@@ -73,23 +111,31 @@ def run_workload(family: str) -> dict:
         archiver.mode_run(drain=True)
         res["drain_s"] = time.perf_counter() - t0
 
-    with conn.cursor() as cur:  # read benchmark, correct query per strategy
+    with conn.cursor() as cur:  # read benchmark: correct query, then unfiltered
         cur.execute(f"SELECT MAX(id) FROM {live}.users")
         max_uid = cur.fetchone()[0]
-        rlat = []
-        for _ in range(300):
-            uid = rng.randrange(1, max_uid + 1)
-            t0 = time.perf_counter()
-            cur.execute(f"SELECT id, status, amount FROM {live}.orders "
-                        f"WHERE user_id=%s {READ_FILTER[family]} "
-                        f"ORDER BY id DESC LIMIT 10", (uid,))
-            cur.fetchall()
-            rlat.append((time.perf_counter() - t0) * 1000)
-        res["read_p50"], res["read_p95"] = percentiles(rlat)
+
+        def read_bench(where: str) -> tuple[float, float]:
+            rlat = []
+            for _ in range(300):
+                uid = rng.randrange(1, max_uid + 1)
+                t0 = time.perf_counter()
+                cur.execute(f"SELECT id, status, amount FROM {live}.orders "
+                            f"WHERE user_id=%s {where} "
+                            f"ORDER BY id DESC LIMIT 10", (uid,))
+                cur.fetchall()
+                rlat.append((time.perf_counter() - t0) * 1000)
+            return percentiles(rlat)
+
+        res["read_p50"], res["read_p95"] = read_bench(READ_FILTER[family])
+        if family in ("a", "c"):  # the wrong-but-common unfiltered query
+            _, res["read_p95_unf"] = read_bench("")
         for t in ("users", "orders", "order_items"):
             cur.execute(f"ANALYZE TABLE {live}.{t}")
             cur.fetchall()
     conn.commit()
+
+    res["restore"] = restore_probe(family, conn)
 
     live_b = sum(sum(table_bytes(conn, live, t)) for t in
                  ("users", "orders", "order_items"))
@@ -128,12 +174,19 @@ def main() -> None:
     for label, fmt in rows:
         cells = [fmt.format(**results[f]) for f in FAMILIES]
         print(f"{label:38s}  {cells[0]:>14s}  {cells[1]:>14s}  {cells[2]:>14s}")
+    unf = [f"{results[f]['read_p95_unf']:.2f}" if "read_p95_unf" in results[f]
+           else "-" for f in FAMILIES]
+    print(f"{'read p95 (ms, unfiltered = WRONG)':38s}  {unf[0]:>14s}  {unf[1]:>14s}  "
+          f"{unf[2]:>14s}")
     drain = results["c"].get("drain_s")
     print(f"{'archiver drain (s, background)':38s}  {'-':>14s}  {'-':>14s}  "
           f"{drain:>14.1f}")
-    print(f"{'restore (undelete) support':38s}  {'flip the flag':>14s}  "
-          f"{'reverse move':>14s}  {'copy back':>14s}")
+    rest = [results[f]["restore"] for f in FAMILIES]
+    print(f"{'restore (verified by probe)':38s}  {rest[0]:>14s}  {rest[1]:>14s}  "
+          f"{rest[2]:>14s}")
     print("-" * 88)
+    if any(r == "FAIL" for r in rest):
+        raise AssertionError(f"restore probe failed: {dict(zip(FAMILIES, rest))}")
     log.info("bench done")
 
 

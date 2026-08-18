@@ -79,15 +79,37 @@ def append_jsonl(path: Path, record: dict) -> None:
 
 
 def read_jsonl(path: Path) -> list[dict]:
+    """Tolerates a torn final line: the traffic process may be mid-append."""
     if not path.exists():
         return []
     out = []
     with path.open() as f:
         for line in f:
             line = line.strip()
-            if line:
+            if not line:
+                continue
+            try:
                 out.append(json.loads(line))
+            except json.JSONDecodeError:
+                log.warning("skipping partial jsonl line in %s", path.name)
     return out
+
+
+def retry_txn(conn, fn, *args, attempts: int = 4):
+    """Run fn(conn, *args) retrying deadlock/lock-wait (1213/1205). The
+    strategies run multi-statement transactions under live traffic; InnoDB
+    may pick either side as the deadlock victim."""
+    import pymysql
+    for attempt in range(attempts):
+        try:
+            return fn(conn, *args)
+        except pymysql.MySQLError as e:
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < attempts - 1:
+                conn.rollback()
+                time.sleep(0.1 * (attempt + 1))
+                continue
+            raise
 
 
 def now_millis() -> int:

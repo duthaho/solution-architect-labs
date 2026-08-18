@@ -119,7 +119,10 @@ physically can't be selected.
 re-registration FAILED: (1062, "Duplicate entry 'user2@example.com' for key 'users.uq_email'")
 ```
 
-The product thinks the account is gone; the database disagrees. The textbook
+The product thinks the account is gone; the database disagrees. The drill then
+executes the crudest working recovery — tombstone the dead row's value
+(`email = CONCAT(email, '#deleted#', id)`) and watch the re-registration
+succeed. The textbook
 fix, `UNIQUE(email, deleted_at)`, has a MySQL-shaped hole: NULLs never
 collide in a unique index, so **two live rows** with the same email and
 `deleted_at = NULL` are both accepted — the constraint now fails in the
@@ -165,6 +168,18 @@ must wait.
 commit order from cascades, and two generations of the same email must be
 allowed to pile up. The mirror is a graveyard, not a database; constraints
 are for the living.
+
+**Why not triggers?** The obvious "fix" for app-level move code is a
+`BEFORE DELETE` trigger per table that copies the row into the mirror — then
+any `DELETE`, from any code path, gets mirrored for free. The costs are why
+this lab builds the app-level version instead: the trigger fires *per row*
+inside the deleting transaction (a big delete now pays a synchronous insert
+per row, doubling its lock time); triggers are invisible in the codebase,
+so the drift problem below gets *worse* — the ALTER now has three copies to
+keep in sync (table, mirror, trigger body); and MySQL triggers don't fire
+for FK-cascade deletes, exactly the multi-table case this lab is about. A
+trigger turns the mirror from an application feature into a hidden database
+behavior — same tax, less visibility.
 
 **Schema drift is the tax.** The move uses positional
 `INSERT ... SELECT t.*` — which is exactly how these systems get written.
@@ -268,13 +283,14 @@ Expected tail of a run (50k seed):
 
                                         A deleted_at        B mirror      C archiver
 --------------------------------------------------------------------------------------
-delete p50 (ms, user-facing)                     7.7            12.7             8.1
-delete p95 (ms, user-facing)                    10.9            27.1            16.5
-read p50 (ms, correct query)                    0.46            0.45            0.58
+delete p50 (ms, user-facing)                     8.5            10.6             7.6
+delete p95 (ms, user-facing)                    13.6            19.7            13.0
+read p50 (ms, correct query)                    0.45            0.49            0.45
 live schema size (MB)                           27.5            23.1            27.5
-dead rows left in live table                     510               0               0
+dead rows left in live table                     507               0               0
+read p95 (ms, unfiltered = WRONG)               1.48               -            1.97
 archiver drain (s, background)                     -               -             0.7
-restore (undelete) support             flip the flag    reverse move       copy back
+restore (verified by probe)            OK: flip flag  OK: reverse move   OK: copy back
 ```
 
 ### Failure drills

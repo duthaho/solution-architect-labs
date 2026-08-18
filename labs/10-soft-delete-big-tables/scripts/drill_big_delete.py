@@ -122,6 +122,12 @@ def main() -> None:
 
     reader.stop = True
     reader.join()
+    n_giant = sum(1 for p, _ in reader.samples if p == "giant")
+    n_batched = sum(1 for p, _ in reader.samples if p == "batched")
+    assert n_giant >= 3 and n_batched >= 3, (
+        f"insufficient reader samples (giant={n_giant}, batched={n_batched}) — "
+        f"the delete windows were too short to measure; rerun with a larger "
+        f"SEED_ROWS")
     g95, b95 = reader.p95("giant"), reader.p95("batched")
     log.info("concurrent reader p95: giant=%.1fms  batched=%.1fms  (flagged %d vs %d)",
              g95, b95, n1, n2)

@@ -28,7 +28,7 @@ import sys
 import time
 
 from common import (connect, count, journal_path, log, outcome_path,
-                    append_jsonl, percentiles, read_jsonl)
+                    append_jsonl, percentiles, read_jsonl, retry_txn)
 
 LIVE = "lab10_c"
 ARCHIVE = "lab10_c_archive"
@@ -84,7 +84,8 @@ def mode_flag() -> None:
     lat = []
     for req in pending:
         t0 = time.perf_counter()
-        (flag_user if req["table"] == "users" else flag_order)(conn, req["id"])
+        fn = flag_user if req["table"] == "users" else flag_order
+        retry_txn(conn, fn, req["id"])
         lat.append((time.perf_counter() - t0) * 1000)
         append_jsonl(outcome_path(FAMILY),
                      {"id": req["id"], "table": req["table"], "action": "soft_deleted"})
@@ -122,7 +123,7 @@ def mode_run(drain: bool) -> None:
     while True:
         moved = 0
         for table, cols, guard in SPECS:
-            moved += archive_batch(conn, table, cols, guard)
+            moved += retry_txn(conn, archive_batch, table, cols, guard)
         moved_total += moved
         if moved == 0:
             if drain:

@@ -54,19 +54,26 @@ def main() -> None:
     before = totals(conn)  # 2. snapshot
     log.info("work created: %d flagged orders; totals before: %s", flagged, before)
 
-    env = dict(os.environ, BATCH="200", SLEEP_MS="30")  # 3. run, then murder
+    # 3. run, then murder. Pacing matters: the kill must land while work
+    # remains, or every assertion below passes vacuously — asserted after.
+    env = dict(os.environ, BATCH="200", SLEEP_MS="100")
     proc = subprocess.Popen([sys.executable, str(SCRIPTS / "archiver.py"), "run"],
                             env=env)
-    time.sleep(1.5)
+    time.sleep(1.0)
     proc.send_signal(signal.SIGKILL)
     proc.wait()
-    log.info("archiver killed with SIGKILL after 1.5s (pid %d)", proc.pid)
+    log.info("archiver killed with SIGKILL after 1.0s (pid %d)", proc.pid)
 
+    remaining_mid = count(conn, LIVE, "orders", "deleted_at IS NOT NULL")
+    assert remaining_mid > 0, (
+        "archiver drained everything before the kill — the crash was never "
+        "tested; increase the flagged work or kill sooner")
     for t in TABLES:  # 4. crash-consistency
         assert overlap(conn, t) == 0, f"{t}: row exists in BOTH live and archive"
     after_kill = totals(conn)
     assert after_kill == before, f"totals changed across the crash: {before} -> {after_kill}"
-    log.info("post-crash: no live/archive overlap, totals intact %s", after_kill)
+    log.info("post-crash: killed with %d orders still flagged, no live/archive "
+             "overlap, totals intact %s", remaining_mid, after_kill)
 
     subprocess.run([sys.executable, str(SCRIPTS / "archiver.py"), "run", "--drain"],
                    env=env, check=True)  # 5. resume

@@ -26,7 +26,7 @@ import time
 import pymysql
 
 from common import (connect, count, journal_path, log, outcome_path,
-                    append_jsonl, percentiles, read_jsonl)
+                    append_jsonl, percentiles, read_jsonl, retry_txn)
 
 LIVE = "lab10_b"
 MIRROR = "lab10_b_deleted"
@@ -151,7 +151,8 @@ def consume_delete_requests(conn) -> None:
     lat, moved_rows = [], 0
     for req in pending:
         t0 = time.perf_counter()
-        n = (move_user if req["table"] == "users" else move_order)(conn, req["id"])
+        fn = move_user if req["table"] == "users" else move_order
+        n = retry_txn(conn, fn, req["id"])
         lat.append((time.perf_counter() - t0) * 1000)
         moved_rows += n
         append_jsonl(outcome_path(FAMILY),
@@ -165,17 +166,27 @@ def restore_roundtrip_demo(conn) -> None:
     log.info("--- Restore round-trip ---")
     with conn.cursor() as cur:
         cur.execute(f"SELECT u.id FROM {LIVE}.users u JOIN {LIVE}.orders o ON o.user_id=u.id "
-                    f"GROUP BY u.id HAVING COUNT(*) >= 2 LIMIT 1")
-        uid = cur.fetchone()[0]
-    before = family_checksum(conn, LIVE, uid)
-    n = move_user(conn, uid, reason="roundtrip")
-    in_mirror = family_checksum(conn, MIRROR, uid)
-    restore_user(conn, uid)
-    after = family_checksum(conn, LIVE, uid)
-    log.info("user %d: moved %d rows out, restored them back", uid, n)
-    log.info("checksum live-before=%s mirror=%s live-after=%s", before, in_mirror, after)
-    assert before == after, "restore did not round-trip byte-identical"
-    log.info("round-trip OK — this restore path is strategy B's one real advantage")
+                    f"GROUP BY u.id HAVING COUNT(*) >= 2 LIMIT 3")
+        candidates = [r[0] for r in cur.fetchall()]
+    conn.commit()  # end the read snapshot
+    assert candidates, "no user with >=2 orders in family b — re-run make seed"
+    # Live traffic can mutate a chosen user's orders between our checksums,
+    # failing the compare even though move/restore was correct. Retry with a
+    # different user; two straight mismatches would mean a real bug.
+    for uid in candidates:
+        before = family_checksum(conn, LIVE, uid)
+        n = move_user(conn, uid, reason="roundtrip")
+        in_mirror = family_checksum(conn, MIRROR, uid)
+        restore_user(conn, uid)
+        after = family_checksum(conn, LIVE, uid)
+        log.info("user %d: moved %d rows out, restored them back", uid, n)
+        log.info("checksum live-before=%s mirror=%s live-after=%s", before, in_mirror, after)
+        if before == after:
+            log.info("round-trip OK — this restore path is strategy B's one real advantage")
+            return
+        log.warning("checksum mismatch for user %d (traffic raced the compare?) "
+                    "— retrying with another user", uid)
+    raise AssertionError("restore did not round-trip byte-identical for any candidate")
 
 
 def drill_drift(conn) -> None:

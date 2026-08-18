@@ -25,6 +25,10 @@ from common import (FAMILIES, connect, journal_path, log, make_order,
 
 RUNNING = True
 RETRYABLE = {1205, 1213, 2003, 2006, 2013}
+# 1452: FK parent vanished between pick_live_id() and our INSERT — a strategy
+# deleted/moved/archived it concurrently. That's the lab working as intended;
+# the op is a legitimate no-op, not a crash.
+SKIPPABLE = {1452}
 
 
 def _stop(*_):
@@ -47,6 +51,8 @@ def exec_with_retry(get_conn, sql: str, params: tuple, max_wait_s: float = 60.0)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 2.0)
                 continue
+            if code in SKIPPABLE:
+                return 0, None
             raise
     return None, None
 

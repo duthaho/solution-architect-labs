@@ -21,7 +21,8 @@ import time
 import pymysql
 
 from common import (connect, count, journal_path, log, outcome_path,
-                    append_jsonl, percentiles, read_jsonl, table_bytes)
+                    append_jsonl, percentiles, read_jsonl, retry_txn,
+                    table_bytes)
 
 LIVE = "lab10_a"
 FAMILY = "a"
@@ -65,10 +66,8 @@ def consume_delete_requests(conn) -> list[float]:
     lat = []
     for req in pending:
         t0 = time.perf_counter()
-        if req["table"] == "users":
-            soft_delete_user(conn, req["id"])
-        else:
-            soft_delete_order(conn, req["id"])
+        fn = soft_delete_user if req["table"] == "users" else soft_delete_order
+        retry_txn(conn, fn, req["id"])
         lat.append((time.perf_counter() - t0) * 1000)
         append_jsonl(outcome_path(FAMILY),
                      {"id": req["id"], "table": req["table"], "action": "soft_deleted"})
@@ -132,7 +131,18 @@ def drill_resurrection(conn) -> None:
     except pymysql.err.IntegrityError as e:
         conn.rollback()
         log.info("re-registration FAILED: %s", e)
-        log.info("the 'deleted' row still owns the email. Fixes and their traps: README §3.2")
+        log.info("the 'deleted' row still owns the email — now run the recovery:")
+    # Recovery: tombstone the deleted row's unique value, freeing it for the
+    # living. (The generated-column alternative is discussed in README §3.2.)
+    with conn.cursor() as cur:
+        cur.execute(f"UPDATE {LIVE}.users SET email=CONCAT(email, '#deleted#', id) "
+                    f"WHERE id=%s", (uid,))
+        cur.execute(f"INSERT INTO {LIVE}.users (email, name) VALUES (%s, %s)",
+                    (email, "returning customer"))
+        new_id = cur.lastrowid
+    conn.commit()
+    log.info("recovery: tombstoned old row's email, re-registration succeeded "
+             "(new user id %d)", new_id)
 
 
 def measure(conn) -> None:
