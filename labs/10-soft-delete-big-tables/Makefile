@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3316
 
 FAMILY ?= a
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop strategy-a
 
 help:
 	@echo "Targets:"
@@ -50,3 +50,6 @@ traffic-stop:
 		sleep 2; rm -f traffic_$(FAMILY).pid; echo "traffic[$(FAMILY)] stopped"; \
 		tail -1 traffic_$(FAMILY).log; \
 	else echo "traffic[$(FAMILY)] not running"; fi
+
+strategy-a:
+	$(PY) scripts/strategy_a.py
