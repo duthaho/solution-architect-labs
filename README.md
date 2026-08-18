@@ -26,6 +26,7 @@ Each lab is **not a toy demo**. Every lab ships with:
 | 07 | [Cache consistency: the stale-set race](labs/07-cache-consistency/) | Deterministically reproduce cache-aside races and thundering herd; compare TTL vs delete-on-write vs versioned keys vs CDC invalidation | ✅ Ready |
 | 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | ✅ Ready |
 | 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | ✅ Ready |
+| 10 | [Soft delete for many big tables](labs/10-soft-delete-big-tables/) | `deleted_at` vs mirror deleted-schema vs background archiver, benchmarked under traffic: broken uniques, schema drift, kill-safe batched archiving, retention purge | ✅ Ready |
 
 ## How to use these labs
 
