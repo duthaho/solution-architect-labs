@@ -8,7 +8,7 @@ FAMILY ?= a
 
 .PHONY: help up down clean install bootstrap seed traffic-start traffic-stop \
         strategy-a strategy-b drill-drift strategy-c archiver-drain \
-        archiver-start archiver-stop purge drill-kill-archiver drill-big-delete verify
+        archiver-start archiver-stop purge drill-kill-archiver drill-big-delete verify bench demo
 
 help:
 	@echo "Targets:"
@@ -93,3 +93,6 @@ drill-big-delete:
 
 verify:
 	$(PY) scripts/verify.py
+
+bench:
+	$(PY) scripts/bench.py
