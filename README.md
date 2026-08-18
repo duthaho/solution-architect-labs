@@ -15,17 +15,21 @@ Each lab is **not a toy demo**. Every lab ships with:
 
 ## Labs
 
-| # | Lab | Problem | Status |
-|---|-----|---------|--------|
-| 01 | [Elasticsearch zero-downtime reindex](labs/01-es-zero-downtime-reindex/) | Change the mapping of a large live index with continuous writes, zero read downtime, and zero data loss | ✅ Ready |
-| 02 | [MySQL online migration of a big table](labs/02-mysql-online-migration/) | ALTER a 100M+ row table under traffic (gh-ost-style: chunked backfill, binlog catch-up, atomic cutover) | ✅ Ready |
-| 03 | [Sync big data between two datasources](labs/03-cdc-mysql-to-es/) | CDC with Debezium/Kafka: MySQL → Elasticsearch, ordering, delivery guarantees, reconciliation | ✅ Ready |
-| 04 | [MySQL failover drill: measure the data-loss window](labs/04-mysql-failover-drill/) | Kill the primary under live writes, promote a replica by GTID, measure acked-but-lost rows (RPO), semi-sync, fencing, split-brain | ✅ Ready |
-| 05 | [Distributed locks are a lie: fencing tokens](labs/05-fencing-tokens/) | Reproduce Kleppmann's lock-corruption scenario deterministically (SIGSTOP past TTL), fix with storage-enforced fencing tokens | ✅ Ready |
-| 06 | [Live resharding under traffic](labs/06-live-resharding/) | Split one big table into N shards with zero downtime: double-write, per-shard backfill, shadow reads, atomic cutover, rollback | ✅ Ready |
-| 07 | [Cache consistency: the stale-set race](labs/07-cache-consistency/) | Deterministically reproduce cache-aside races and thundering herd; compare TTL vs delete-on-write vs versioned keys vs CDC invalidation | ✅ Ready |
-| 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | ✅ Ready |
-| 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | ✅ Ready |
+| # | Lab | Category | Problem | Status |
+|---|-----|----------|---------|--------|
+| 01 | [Elasticsearch zero-downtime reindex](labs/01-es-zero-downtime-reindex/) | Migration | Change the mapping of a large live index with continuous writes, zero read downtime, and zero data loss | ✅ Ready |
+| 02 | [MySQL online migration of a big table](labs/02-mysql-online-migration/) | Migration | ALTER a 100M+ row table under traffic (gh-ost-style: chunked backfill, binlog catch-up, atomic cutover) | ✅ Ready |
+| 03 | [Sync big data between two datasources](labs/03-cdc-mysql-to-es/) | Consistency | CDC with Debezium/Kafka: MySQL → Elasticsearch, ordering, delivery guarantees, reconciliation | ✅ Ready |
+| 04 | [MySQL failover drill: measure the data-loss window](labs/04-mysql-failover-drill/) | HA / Replication | Kill the primary under live writes, promote a replica by GTID, measure acked-but-lost rows (RPO), semi-sync, fencing, split-brain | ✅ Ready |
+| 05 | [Distributed locks are a lie: fencing tokens](labs/05-fencing-tokens/) | Coordination | Reproduce Kleppmann's lock-corruption scenario deterministically (SIGSTOP past TTL), fix with storage-enforced fencing tokens | ✅ Ready |
+| 06 | [Live resharding under traffic](labs/06-live-resharding/) | Migration | Split one big table into N shards with zero downtime: double-write, per-shard backfill, shadow reads, atomic cutover, rollback | ✅ Ready |
+| 07 | [Cache consistency: the stale-set race](labs/07-cache-consistency/) | Consistency | Deterministically reproduce cache-aside races and thundering herd; compare TTL vs delete-on-write vs versioned keys vs CDC invalidation | ✅ Ready |
+| 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Consistency | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | ✅ Ready |
+| 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Migration | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | ✅ Ready |
+| 10 | [Soft delete for many big tables](labs/10-soft-delete-big-tables/) | Lifecycle | `deleted_at` vs mirror deleted-schema vs background archiver, benchmarked under traffic: broken uniques, schema drift, kill-safe batched archiving, retention purge | ✅ Ready |
+
+New problem ideas live in **[BACKLOG.md](BACKLOG.md)** — a curated, deduplicated
+catalog with categories and status, feeding future labs.
 
 ## How to use these labs
 
