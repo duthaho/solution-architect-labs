@@ -39,6 +39,7 @@ HOT = int(os.environ.get("HOT", "4"))  # size of the hot account set
 HANDLERS = {
     "naive": strategies.transfer_naive,
     "a": strategies.transfer_pessimistic,
+    "b": strategies.transfer_optimistic,
 }
 
 

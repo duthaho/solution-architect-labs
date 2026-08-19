@@ -97,3 +97,55 @@ def transfer_pessimistic(conn, tid, src, dst, amount):
                 continue
             raise
     return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES}
+
+
+# --------------------------------------------------- b: optimistic locking
+def transfer_optimistic(conn, tid, src, dst, amount):
+    """No locks on read. Every write is conditional on the version observed:
+    UPDATE ... WHERE id=? AND version=? bumps the version, and rowcount 0
+    means someone got there first — roll back and retry from a fresh read.
+    The stale write can never land; the cost is retries under contention
+    (count them: bench makes this the story)."""
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT balance, version FROM accounts WHERE id = %s", (src,))
+                src_bal, src_ver = cur.fetchone()
+                src_bal = Decimal(src_bal)
+                cur.execute(
+                    "SELECT balance, version FROM accounts WHERE id = %s", (dst,))
+                dst_bal, dst_ver = cur.fetchone()
+                dst_bal = Decimal(dst_bal)
+
+                if src_bal < amount:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt}
+
+                cur.execute(
+                    "UPDATE accounts SET balance = %s, version = version + 1 "
+                    "WHERE id = %s AND version = %s",
+                    (src_bal - amount, src, src_ver),
+                )
+                if cur.rowcount != 1:
+                    conn.rollback()
+                    continue  # version moved under us — retry
+                cur.execute(
+                    "UPDATE accounts SET balance = %s, version = version + 1 "
+                    "WHERE id = %s AND version = %s",
+                    (dst_bal + amount, dst, dst_ver),
+                )
+                if cur.rowcount != 1:
+                    conn.rollback()
+                    continue
+                _record(cur, tid, "b", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "conflict", "retries": MAX_RETRIES}
