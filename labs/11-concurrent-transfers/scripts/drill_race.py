@@ -40,6 +40,7 @@ HANDLERS = {
     "naive": strategies.transfer_naive,
     "a": strategies.transfer_pessimistic,
     "b": strategies.transfer_optimistic,
+    "c": strategies.transfer_atomic,
 }
 
 

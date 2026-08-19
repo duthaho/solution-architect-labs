@@ -149,3 +149,41 @@ def transfer_optimistic(conn, tid, src, dst, amount):
                 continue
             raise
     return {"ok": False, "reason": "conflict", "retries": MAX_RETRIES}
+
+
+# ------------------------------------------------ c: atomic conditional write
+def transfer_atomic(conn, tid, src, dst, amount):
+    """No read at all. The debit IS the check:
+
+        UPDATE accounts SET balance = balance - x WHERE id = ? AND balance >= x
+
+    InnoDB evaluates the predicate on the current, locked row — there is no
+    snapshot to go stale. rowcount 0 means insufficient funds, atomically.
+    The smallest correct fix, and the one that can't express business logic
+    that needs the read value (fees, limits, fraud checks)."""
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE accounts SET balance = balance - %s "
+                    "WHERE id = %s AND balance >= %s",
+                    (amount, src, amount),
+                )
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt}
+                cur.execute(
+                    "UPDATE accounts SET balance = balance + %s WHERE id = %s",
+                    (amount, dst),
+                )
+                _record(cur, tid, "c", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES}
