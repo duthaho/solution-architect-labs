@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3317
 MODE ?= naive
 
 .PHONY: help up down clean install bootstrap seed drill-race drill-deadlock \
-        verify verify-naive
+        verify verify-naive bench
 
 help:
 	@echo "Targets:"
@@ -53,3 +53,8 @@ verify-naive:
 	else \
 		echo "verify FAILED as expected: the naive corruption is visible"; \
 	fi
+
+# Resets the world per strategy (reseed), then compares all four under the
+# identical contended workload.
+bench:
+	$(PY) scripts/bench.py
