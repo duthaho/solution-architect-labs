@@ -23,13 +23,30 @@ import common
 ROUNDS = int(os.environ.get("ROUNDS", "10"))
 HOLD_MS = int(os.environ.get("HOLD_MS", "50"))
 AMOUNT = Decimal("1.00")
+BARRIER_TIMEOUT_S = 30
+
+_stats_lock = threading.Lock()
 
 
 def opposing_transfer(order: str, src: int, dst: int,
                       barrier: threading.Barrier, stats: dict) -> None:
     conn = common.connect()
+    try:
+        _rounds(order, src, dst, barrier, stats, conn)
+    finally:
+        barrier.abort()  # never strand the peer, however we exit
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _rounds(order, src, dst, barrier, stats, conn) -> None:
     for _ in range(ROUNDS):
-        barrier.wait()
+        try:
+            barrier.wait(timeout=BARRIER_TIMEOUT_S)
+        except threading.BrokenBarrierError:
+            return  # peer died; stop cleanly
         lock_seq = (src, dst) if order == "arrival" else tuple(sorted((src, dst)))
         try:
             with conn.cursor() as cur:
@@ -51,15 +68,16 @@ def opposing_transfer(order: str, src: int, dst: int,
                     (AMOUNT, dst),
                 )
             conn.commit()
-            stats["acked"] += 1
+            with _stats_lock:
+                stats["acked"] += 1
         except pymysql.MySQLError as e:
             conn.rollback()
             code = e.args[0] if e.args else 0
             if code == 1213:
-                stats["deadlocks"] += 1
+                with _stats_lock:
+                    stats["deadlocks"] += 1
             else:
                 raise
-    conn.close()
 
 
 def run(order: str) -> dict:
@@ -77,8 +95,28 @@ def run(order: str) -> dict:
 
 def main() -> None:
     print(f"--- drill_deadlock (A->B vs B->A, hold {HOLD_MS}ms between locks) ---")
-    arrival = run("arrival")
-    sorted_ = run("sorted")
+
+    # This drill moves money without journaling it (deadlocks, not
+    # accounting, are its subject). Snapshot the two accounts and restore
+    # them afterwards so a standalone run never trips verify.py.
+    conn = common.connect()
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, balance FROM accounts WHERE id IN (1, 2)")
+        snapshot = {row[0]: row[1] for row in cur.fetchall()}
+    conn.rollback()
+
+    try:
+        arrival = run("arrival")
+        sorted_ = run("sorted")
+    finally:
+        with conn.cursor() as cur:
+            for aid, bal in snapshot.items():
+                cur.execute("UPDATE accounts SET balance = %s WHERE id = %s",
+                            (bal, aid))
+        conn.commit()
+        conn.close()
+        print("accounts 1 and 2 restored to their pre-drill balances")
+
     if arrival["deadlocks"] > 0 and sorted_["deadlocks"] == 0:
         print("VERDICT: arrival order deadlocks, sorted order does not — "
               "lock ordering is the fix")

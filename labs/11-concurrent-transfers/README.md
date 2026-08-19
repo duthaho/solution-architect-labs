@@ -88,12 +88,13 @@ Contracts the whole lab hangs on:
   `transfers` row inside the same transaction as the balance change; the
   client journals every ack to `race_<mode>.jsonl`. `verify.py` joins the
   two on `transfer_id`, both directions.
-* **The race is deterministic by construction.** The naive handler holds
-  `HOLD_MS` (default 50ms) between read and write — modeling the app think
-  time (fees, fraud check, an RPC) every real transfer path has — so
-  concurrent read-windows always overlap. And workers use *distinct* amounts
-  and destinations, because symmetric lost updates cancel out in the sum and
-  hide the bug.
+* **The race is deterministic by construction.** Under the drill a second
+  barrier sits inside the naive handler between its read and its write: no
+  worker writes until every worker has read, so the stale-read overlap is a
+  certainty, not a scheduler win. (Standalone, the handler holds `HOLD_MS`
+  — default 50ms — instead, modeling the app think time every real transfer
+  path has.) And workers use *distinct* amounts and destinations, because
+  symmetric lost updates cancel out in the sum and hide the bug.
 
 ## 3. Deep dive: four places to put the atomicity
 
@@ -192,18 +193,18 @@ Expected shape of the interesting moments (numbers vary slightly):
 
 ```
 --- drill_race MODE=naive (8 workers x 12 rounds, hot set 4) ---
-acked=88 rejected=8 retries=0 wall=1.4s
-start_total=10000.00 end_total=11764.00 drift=+1764.00
+acked=88 rejected=8 errors=0 retries=0 deadlocks=0 wall=0.7s
+start_total=10000.00 end_total=11765.00 drift=+1765.00
 VERDICT: CONSERVATION VIOLATED — lost update / double-spend reproduced
 
 arrival lock order: 10 opposing rounds -> acked=10 deadlocks(1213)=10
  sorted lock order: 10 opposing rounds -> acked=20 deadlocks(1213)=0
 
-strategy                      acked  rejects  retries    ops/s   p50 ms   p95 ms  conserved
-a pessimistic (FOR UPDATE)      243       77        0     85.9     46.0     89.2        yes
-b optimistic (version)          243       77      860     72.6     59.5    105.9        yes
-c atomic conditional            244       76        0    114.9     35.5     65.4        yes
-d append-only ledger            243       77        0     92.5     43.3     82.6        yes
+strategy                      acked  rejects  retries  deadlocks    ops/s   p50 ms   p95 ms  conserved
+a pessimistic (FOR UPDATE)      244       76        0          0     99.2     40.6     73.1        yes
+b optimistic (version)          244       76      861          0     83.4     52.4     90.0        yes
+c atomic conditional            244       76        0          0    123.8     29.4     54.8        yes
+d append-only ledger            244       76        0          0     95.4     43.4     82.1        yes
 ```
 
 Knobs: `WORKERS`, `ROUNDS`, `HOT`, `HOLD_MS`, `BENCH_ROUNDS`, `ACCOUNTS`,
