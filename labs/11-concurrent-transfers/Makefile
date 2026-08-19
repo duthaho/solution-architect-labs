@@ -5,7 +5,7 @@ export MYSQL_PORT ?= 3317
 
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed drill-race
+.PHONY: help up down clean install bootstrap seed drill-race drill-deadlock
 
 help:
 	@echo "Targets:"
@@ -37,3 +37,6 @@ seed:
 
 drill-race:
 	MODE=$(MODE) $(PY) scripts/drill_race.py
+
+drill-deadlock:
+	$(PY) scripts/drill_deadlock.py
