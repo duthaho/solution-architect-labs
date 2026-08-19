@@ -5,7 +5,8 @@ export MYSQL_PORT ?= 3317
 
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed drill-race drill-deadlock
+.PHONY: help up down clean install bootstrap seed drill-race drill-deadlock \
+        verify verify-naive
 
 help:
 	@echo "Targets:"
@@ -40,3 +41,15 @@ drill-race:
 
 drill-deadlock:
 	$(PY) scripts/drill_deadlock.py
+
+verify:
+	$(PY) scripts/verify.py
+
+# After a naive run the checker MUST fail — its exit 1 is the proof it can
+# see the corruption. This target inverts the exit code.
+verify-naive:
+	@if $(PY) scripts/verify.py; then \
+		echo "ERROR: verify passed after the naive race — checker is blind"; exit 1; \
+	else \
+		echo "verify FAILED as expected: the naive corruption is visible"; \
+	fi
