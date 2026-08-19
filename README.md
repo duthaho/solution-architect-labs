@@ -27,6 +27,7 @@ Each lab is **not a toy demo**. Every lab ships with:
 | 08 | [Idempotent event processing at scale](labs/08-idempotent-event-processing/) | Consistency | Exactly-once illusion: dedupe-in-txn, outbox pattern, poison pills, DLQ + safe replay | ✅ Ready |
 | 09 | [Deploy with no data gap and no downtime](labs/09-expand-contract-deploy/) | Migration | Expand/contract schema migrations, blue-green + rolling deploys, backward compatibility windows — the series capstone | ✅ Ready |
 | 10 | [Soft delete for many big tables](labs/10-soft-delete-big-tables/) | Lifecycle | `deleted_at` vs mirror deleted-schema vs background archiver, benchmarked under traffic: broken uniques, schema drift, kill-safe batched archiving, retention purge | ✅ Ready |
+| 11 | [Concurrent money transfer: the double-spend](labs/11-concurrent-transfers/) | Concurrency | Reproduce the lost update deterministically (transactions don't save you), fix it four ways — FOR UPDATE, version column, atomic conditional UPDATE, append-only ledger — deadlock drill, conservation-of-money verifier, contention bench | ✅ Ready |
 
 New problem ideas live in **[BACKLOG.md](BACKLOG.md)** — a curated, deduplicated
 catalog with categories and status, feeding future labs.
