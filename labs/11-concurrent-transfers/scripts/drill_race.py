@@ -41,6 +41,7 @@ HANDLERS = {
     "a": strategies.transfer_pessimistic,
     "b": strategies.transfer_optimistic,
     "c": strategies.transfer_atomic,
+    "d": strategies.transfer_ledger,
 }
 
 
@@ -113,6 +114,19 @@ def main() -> None:
     conn.rollback()
     end_total = sum(end.values())
     negatives = common.negative_accounts(conn, MODE)
+
+    cache_drift = []
+    if MODE == "d":
+        # The read model must equal the ledger it materializes.
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.account_id FROM balance_cache c "
+                "JOIN (SELECT account_id, SUM(amount) s FROM entries "
+                "      GROUP BY account_id) e ON e.account_id = c.account_id "
+                "WHERE c.balance <> e.s"
+            )
+            cache_drift = [r[0] for r in cur.fetchall()]
+        conn.rollback()
     conn.close()
 
     # Journal-implied expectation: start balance + sum of acked deltas.
@@ -139,8 +153,11 @@ def main() -> None:
           + (f" -> {lost}" if lost else ""))
     if negatives:
         print(f"NEGATIVE balances: {negatives}")
+    if MODE == "d":
+        print(f"balance_cache != SUM(entries) for {len(cache_drift)} accounts"
+              + (f" -> {cache_drift}" if cache_drift else ""))
 
-    violated = bool(drift != 0 or lost or negatives)
+    violated = bool(drift != 0 or lost or negatives or cache_drift)
     if MODE == "naive":
         if violated:
             print("VERDICT: CONSERVATION VIOLATED — lost update / double-spend "

@@ -99,6 +99,56 @@ def transfer_pessimistic(conn, tid, src, dst, amount):
     return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES}
 
 
+# ----------------------------------------------------- d: append-only ledger
+def transfer_ledger(conn, tid, src, dst, amount):
+    """Nothing is ever UPDATEd in place on the money path: the truth is the
+    entries table (signed, immutable, auditable), and a transfer is two
+    appended rows. balance_cache is the materialized read model; locking its
+    rows (sorted order, like strategy a) is the per-account serialization
+    point that both prevents overdraft and hands out the next seq. The
+    (account_id, seq) primary key is the backstop: even a buggy caller
+    cannot append two entries at the same seq."""
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                cache = {}
+                for acct in sorted((src, dst)):
+                    cur.execute(
+                        "SELECT balance, last_seq FROM balance_cache "
+                        "WHERE account_id = %s FOR UPDATE",
+                        (acct,),
+                    )
+                    bal, seq = cur.fetchone()
+                    cache[acct] = (Decimal(bal), seq)
+                if cache[src][0] < amount:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt}
+
+                for acct, delta in ((src, -amount), (dst, amount)):
+                    next_seq = cache[acct][1] + 1
+                    cur.execute(
+                        "INSERT INTO entries (account_id, seq, amount, transfer_id) "
+                        "VALUES (%s, %s, %s, %s)",
+                        (acct, next_seq, delta, tid),
+                    )
+                    cur.execute(
+                        "UPDATE balance_cache SET balance = balance + %s, "
+                        "last_seq = %s WHERE account_id = %s",
+                        (delta, next_seq, acct),
+                    )
+                _record(cur, tid, "d", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES}
+
+
 # --------------------------------------------------- b: optimistic locking
 def transfer_optimistic(conn, tid, src, dst, amount):
     """No locks on read. Every write is conditional on the version observed:
