@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3317
 MODE ?= naive
 
 .PHONY: help up down clean install bootstrap seed drill-race drill-deadlock \
-        verify verify-naive bench
+        verify verify-naive bench demo
 
 help:
 	@echo "Targets:"
@@ -58,3 +58,31 @@ verify-naive:
 # identical contended workload.
 bench:
 	$(PY) scripts/bench.py
+
+demo: up install bootstrap seed
+	@echo ""
+	@echo "=== 1. the bug: naive read-modify-write under 8 concurrent writers ==="
+	$(MAKE) drill-race MODE=naive
+	@echo ""
+	@echo "=== 2. the checker sees it: verify MUST fail on the naive world ==="
+	$(MAKE) verify-naive
+	@echo ""
+	@echo "=== 3. deadlock drill: why locks are taken in sorted order ==="
+	@echo "    (runs on the already-dirty world: it journals nothing, so it"
+	@echo "     must precede the reseed that verify measures from)"
+	$(MAKE) drill-deadlock
+	@echo ""
+	@echo "=== 4. reseed: naive corrupted the world, strategies get a clean one ==="
+	$(MAKE) seed
+	@echo ""
+	@echo "=== 5. the four fixes, same drill ==="
+	$(MAKE) drill-race MODE=a
+	$(MAKE) drill-race MODE=b
+	$(MAKE) drill-race MODE=c
+	$(MAKE) drill-race MODE=d
+	@echo ""
+	@echo "=== 6. verify: conservation + exactly-once across journals and DB ==="
+	$(MAKE) verify
+	@echo ""
+	@echo "=== 7. benchmark: the four fixes under identical contention ==="
+	$(MAKE) bench
