@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.0.43
+    container_name: lab11-mysql
+    command:
+      # Plain InnoDB, tiny data set — the contention is the point, not I/O.
+      # Default isolation stays REPEATABLE READ on purpose: the naive strategy
+      # must demonstrate that "it's in a transaction" does not stop lost updates.
+      - --server-id=1
+      - --default-authentication-plugin=mysql_native_password
+      - --innodb-buffer-pool-size=256M
+    environment:
+      - MYSQL_ROOT_PASSWORD=lab
+    ports:
+      - "${MYSQL_PORT:-3317}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-plab"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+  adminer:
+    image: adminer:4.8.1
+    container_name: lab11-adminer
+    profiles: ["ui"]
+    ports:
+      - "8091:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysqldata:
