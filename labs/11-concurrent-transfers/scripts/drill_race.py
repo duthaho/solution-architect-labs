@@ -36,7 +36,10 @@ WORKERS = int(os.environ.get("WORKERS", "8"))
 ROUNDS = int(os.environ.get("ROUNDS", "12"))
 HOT = int(os.environ.get("HOT", "4"))  # size of the hot account set
 
-HANDLERS = {"naive": strategies.transfer_naive}
+HANDLERS = {
+    "naive": strategies.transfer_naive,
+    "a": strategies.transfer_pessimistic,
+}
 
 
 def plan_op(round_i: int, worker: int) -> tuple[int, int, Decimal]:
@@ -87,9 +90,7 @@ def main() -> None:
     jpath.unlink(missing_ok=True)  # a drill run owns its journal
 
     conn = common.connect()
-    with conn.cursor() as cur:
-        cur.execute("SELECT id, balance FROM accounts ORDER BY id")
-        start = {row[0]: Decimal(row[1]) for row in cur.fetchall()}
+    start = common.read_balances(conn, MODE)
     conn.rollback()  # close the read snapshot
     start_total = sum(start.values())
 
@@ -106,12 +107,10 @@ def main() -> None:
         t.join()
     wall = time.monotonic() - t0
 
-    with conn.cursor() as cur:
-        cur.execute("SELECT id, balance FROM accounts ORDER BY id")
-        end = {row[0]: Decimal(row[1]) for row in cur.fetchall()}
+    end = common.read_balances(conn, MODE)
     conn.rollback()
     end_total = sum(end.values())
-    negatives = common.negative_accounts(conn)
+    negatives = common.negative_accounts(conn, MODE)
     conn.close()
 
     # Journal-implied expectation: start balance + sum of acked deltas.

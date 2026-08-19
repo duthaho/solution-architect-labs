@@ -82,15 +82,33 @@ def read_seed() -> dict:
         return json.load(f)
 
 
-def sum_balances(conn) -> Decimal:
+def balance_table(mode: str) -> tuple[str, str]:
+    """(table, id_column) holding balances for a mode. Strategies naive/a/b/c
+    mutate accounts; strategy d's data model is the ledger, whose readable
+    balance is balance_cache."""
+    if mode == "d":
+        return ("balance_cache", "account_id")
+    return ("accounts", "id")
+
+
+def read_balances(conn, mode: str) -> dict[int, Decimal]:
+    table, idcol = balance_table(mode)
     with conn.cursor() as cur:
-        cur.execute("SELECT COALESCE(SUM(balance), 0) FROM accounts")
+        cur.execute(f"SELECT {idcol}, balance FROM {table} ORDER BY {idcol}")
+        return {row[0]: Decimal(row[1]) for row in cur.fetchall()}
+
+
+def sum_balances(conn, mode: str = "a") -> Decimal:
+    table, _ = balance_table(mode)
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT COALESCE(SUM(balance), 0) FROM {table}")
         return Decimal(cur.fetchone()[0])
 
 
-def negative_accounts(conn) -> list[tuple[int, Decimal]]:
+def negative_accounts(conn, mode: str = "a") -> list[tuple[int, Decimal]]:
+    table, idcol = balance_table(mode)
     with conn.cursor() as cur:
-        cur.execute("SELECT id, balance FROM accounts WHERE balance < 0")
+        cur.execute(f"SELECT {idcol}, balance FROM {table} WHERE balance < 0")
         return [(r[0], Decimal(r[1])) for r in cur.fetchall()]
 
 

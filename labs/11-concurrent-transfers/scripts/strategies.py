@@ -55,3 +55,45 @@ def transfer_naive(conn, tid, src, dst, amount):
         _record(cur, tid, "naive", src, dst, amount)
     conn.commit()
     return {"ok": True, "reason": "", "retries": 0}
+
+
+# --------------------------------------------------- a: pessimistic locking
+def transfer_pessimistic(conn, tid, src, dst, amount):
+    """SELECT ... FOR UPDATE on BOTH accounts, always locking in sorted-id
+    order so two opposing transfers can never hold one lock each and wait on
+    the other (the deadlock drill shows what happens without this). The
+    balance check then reads a locked, current row — the race window is
+    gone. Deadlock/lock-wait (1213/1205) still gets a bounded retry: under
+    load InnoDB may pick us as a victim for unrelated reasons."""
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                balances = {}
+                for acct in sorted((src, dst)):
+                    cur.execute(
+                        "SELECT balance FROM accounts WHERE id = %s FOR UPDATE",
+                        (acct,),
+                    )
+                    balances[acct] = Decimal(cur.fetchone()[0])
+                if balances[src] < amount:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt}
+                cur.execute(
+                    "UPDATE accounts SET balance = balance - %s WHERE id = %s",
+                    (amount, src),
+                )
+                cur.execute(
+                    "UPDATE accounts SET balance = balance + %s WHERE id = %s",
+                    (amount, dst),
+                )
+                _record(cur, tid, "a", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES}
