@@ -33,7 +33,7 @@ posture, or raw throughput are tagged 🧭 — not lesser, just a different book
 | P01 | Soft delete for many big tables (mirror `deleted` schema per table) | Lifecycle | ✅ Covered | **Lab 10**. `deleted_at` vs mirror-schema vs archiver, benchmarked. |
 | P02 | Release a DB migration with no downtime (schema + query logic change together) | Migration | ✅ Covered | **Lab 09** (expand/contract) + **Lab 02** (online big-table ALTER). Backward-compat window is exactly lab 09's thesis. |
 | P03 | Async replication: primary acks a write, crashes before replicating, replica promoted → lost row | HA / Replication | ✅ Covered | **Lab 04** measures this exact RPO window and shows semi-sync / fencing. |
-| P04 | Concurrent money transfer: balance 50k, two devices each send 50k at once → double-spend | Concurrency | 🎯 Next up | **Strongest next lab.** Reproduce the lost-update / double-spend deterministically, then fix four ways: `SELECT ... FOR UPDATE`, optimistic version column, atomic `UPDATE ... WHERE balance >= amount`, and a ledger/append-only model. Failure drill: two writers race under load, assert conservation of money. Classic fintech interview question. |
+| P04 | Concurrent money transfer: balance 50k, two devices each send 50k at once → double-spend | Concurrency | ✅ Covered | **Lab 11**. Lost update reproduced deterministically; fixed four ways (`FOR UPDATE`, version column, atomic conditional `UPDATE`, append-only ledger) + deadlock drill and conservation-of-money verifier, benchmarked under hot-account contention. |
 | P05 | Top-K most-viewed products: 10M products, 10B views/day, windows per minute/day/month | Scale / Analytics | 🎯 Next up | Fits well. Count-Min Sketch + heap for approximate top-K, time-bucketed rollups, hot-key skew. Drill: exact vs approximate error under Zipfian traffic. Pairs naturally with a streaming ingest. |
 | P05b | Distributed unique ID generation: short, sortable, no collision at tens of thousands tx/s | Scale / Coordination | 🎯 Next up | Snowflake-style: clock bits + worker id + sequence. Drills: clock skew / backwards-clock, worker-id collision, sequence exhaustion within a ms. Compare vs UUIDv7, DB auto-increment, Redis INCR. Small, self-contained, high interview value. |
 | P06 | "On this day" / memories feature on a social feed, RabbitMQ, must not miss messages | Messaging / Consistency | 💡 Candidate | Overlaps **Lab 08** (idempotent processing, outbox, DLQ). Could be a lab 08 extension or a fan-out-on-schedule variant rather than a fresh lab — the "no miss message" core is already covered. Decide: extend 08 or build a scheduled-fanout lab. |
@@ -46,16 +46,12 @@ posture, or raw throughput are tagged 🧭 — not lesser, just a different book
 
 ## What to build next (recommendation)
 
-Three problems sit squarely in the repo's core and would extend the series
-cleanly, in rough priority order:
+Two problems sit squarely in the repo's core and would extend the series
+cleanly, in rough priority order (P04 shipped as **lab 11**):
 
-1. **P04 — concurrent money transfer / double-spend.** The most-asked
-   interview scenario of the set, maps perfectly to "correctness under
-   concurrent writes", and the four-way fix comparison mirrors lab 10's
-   structure. Deterministic drill, high value.
-2. **P05b — unique ID generation.** Small, self-contained, sharp failure
+1. **P05b — unique ID generation.** Small, self-contained, sharp failure
    drills (clock skew, worker collision). Good "one afternoon" lab.
-3. **P05 — Top-K at scale.** Bigger; introduces approximate data structures
+2. **P05 — Top-K at scale.** Bigger; introduces approximate data structures
    and streaming ingest, a new flavor for the repo.
 
 `P06`/`P07` are better handled by **extending labs 08 / 03** than by new labs —

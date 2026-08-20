@@ -1,0 +1,4 @@
+*.jsonl
+seed.json
+*.pid
+*.log

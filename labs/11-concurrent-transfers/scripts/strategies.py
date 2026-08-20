@@ -1,0 +1,268 @@
+"""The five transfer handlers. One signature:
+
+    fn(conn, transfer_id, src, dst, amount, sync=None)
+        -> {"ok": bool, "reason": str, "retries": int, "deadlocks": int}
+
+`retries` counts every re-attempt; `deadlocks` counts the subset caused by
+InnoDB kicking us (1213/1205). `sync` is only honored by the naive handler:
+the race drill passes a rendezvous that parks every worker between its read
+and its write, so overlapping stale reads are guaranteed by construction —
+not by winning a scheduler race.
+
+Every handler that acks a transfer also inserts its row into `transfers`
+inside the same transaction — the applied-work journal that verify.py joins
+against the client-side race_<mode>.jsonl.
+"""
+import os
+import time
+from decimal import Decimal
+
+import pymysql
+
+# When no sync rendezvous is provided, the naive handler holds this long
+# between reading balances and writing them back. It models the app-server
+# think time (fee calculation, fraud check, an RPC) that exists in every
+# real transfer path; under the drill an explicit barrier replaces it.
+HOLD_MS = int(os.environ.get("HOLD_MS", "50"))
+
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "10"))
+
+
+def _record(cur, tid: str, mode: str, src: int, dst: int, amount: Decimal) -> None:
+    cur.execute(
+        "INSERT INTO transfers (transfer_id, mode, src, dst, amount) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (tid, mode, src, dst, amount),
+    )
+
+
+# --------------------------------------------------------------------- naive
+def transfer_naive(conn, tid, src, dst, amount, sync=None):
+    """Read → check → think → write computed values. It is inside a
+    transaction, and REPEATABLE READ does not save it: both racers read the
+    same snapshot, both pass the balance check, and the second COMMIT
+    silently overwrites the first one's debit. The double-spend.
+
+    The rendezvous (or think-time sleep) sits between read and write —
+    with `sync`, no worker writes until every worker has read."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT balance FROM accounts WHERE id = %s", (src,))
+        src_bal = Decimal(cur.fetchone()[0])
+        cur.execute("SELECT balance FROM accounts WHERE id = %s", (dst,))
+        dst_bal = Decimal(cur.fetchone()[0])
+
+        if sync is not None:
+            sync()  # all racers have read; now everyone may write
+        else:
+            time.sleep(HOLD_MS / 1000.0)  # app think time — the race window
+
+        if src_bal < amount:
+            conn.rollback()
+            return {"ok": False, "reason": "insufficient", "retries": 0,
+                    "deadlocks": 0}
+
+        cur.execute("UPDATE accounts SET balance = %s WHERE id = %s",
+                    (src_bal - amount, src))
+        cur.execute("UPDATE accounts SET balance = %s WHERE id = %s",
+                    (dst_bal + amount, dst))
+        _record(cur, tid, "naive", src, dst, amount)
+    conn.commit()
+    return {"ok": True, "reason": "", "retries": 0, "deadlocks": 0}
+
+
+# --------------------------------------------------- a: pessimistic locking
+def transfer_pessimistic(conn, tid, src, dst, amount, sync=None):
+    """SELECT ... FOR UPDATE on BOTH accounts, always locking in sorted-id
+    order so two opposing transfers can never hold one lock each and wait on
+    the other (the deadlock drill shows what happens without this). The
+    balance check then reads a locked, current row — the race window is
+    gone. Deadlock/lock-wait (1213/1205) still gets a bounded retry: under
+    load InnoDB may pick us as a victim for unrelated reasons."""
+    dl = 0
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                balances = {}
+                for acct in sorted((src, dst)):
+                    cur.execute(
+                        "SELECT balance FROM accounts WHERE id = %s FOR UPDATE",
+                        (acct,),
+                    )
+                    balances[acct] = Decimal(cur.fetchone()[0])
+                if balances[src] < amount:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt,
+                            "deadlocks": dl}
+                cur.execute(
+                    "UPDATE accounts SET balance = balance - %s WHERE id = %s",
+                    (amount, src),
+                )
+                cur.execute(
+                    "UPDATE accounts SET balance = balance + %s WHERE id = %s",
+                    (amount, dst),
+                )
+                _record(cur, tid, "a", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt, "deadlocks": dl}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                dl += 1
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES,
+            "deadlocks": dl}
+
+
+# ----------------------------------------------------- d: append-only ledger
+def transfer_ledger(conn, tid, src, dst, amount, sync=None):
+    """Nothing is ever UPDATEd in place on the money path: the truth is the
+    entries table (signed, immutable, auditable), and a transfer is two
+    appended rows. balance_cache is the materialized read model; locking its
+    rows (sorted order, like strategy a) is the per-account serialization
+    point that both prevents overdraft and hands out the next seq. The
+    (account_id, seq) primary key is the backstop: even a buggy caller
+    cannot append two entries at the same seq."""
+    dl = 0
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                cache = {}
+                for acct in sorted((src, dst)):
+                    cur.execute(
+                        "SELECT balance, last_seq FROM balance_cache "
+                        "WHERE account_id = %s FOR UPDATE",
+                        (acct,),
+                    )
+                    bal, seq = cur.fetchone()
+                    cache[acct] = (Decimal(bal), seq)
+                if cache[src][0] < amount:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt,
+                            "deadlocks": dl}
+
+                for acct, delta in ((src, -amount), (dst, amount)):
+                    next_seq = cache[acct][1] + 1
+                    cur.execute(
+                        "INSERT INTO entries (account_id, seq, amount, transfer_id) "
+                        "VALUES (%s, %s, %s, %s)",
+                        (acct, next_seq, delta, tid),
+                    )
+                    cur.execute(
+                        "UPDATE balance_cache SET balance = balance + %s, "
+                        "last_seq = %s WHERE account_id = %s",
+                        (delta, next_seq, acct),
+                    )
+                _record(cur, tid, "d", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt, "deadlocks": dl}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                dl += 1
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES,
+            "deadlocks": dl}
+
+
+# --------------------------------------------------- b: optimistic locking
+def transfer_optimistic(conn, tid, src, dst, amount, sync=None):
+    """No locks on read. Every write is conditional on the version observed:
+    UPDATE ... WHERE id=? AND version=? bumps the version, and rowcount 0
+    means someone got there first — roll back and retry from a fresh read.
+    The stale write can never land; the cost is retries under contention
+    (count them: bench makes this the story)."""
+    dl = 0
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT balance, version FROM accounts WHERE id = %s", (src,))
+                src_bal, src_ver = cur.fetchone()
+                src_bal = Decimal(src_bal)
+                cur.execute(
+                    "SELECT balance, version FROM accounts WHERE id = %s", (dst,))
+                dst_bal, dst_ver = cur.fetchone()
+                dst_bal = Decimal(dst_bal)
+
+                if src_bal < amount:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt,
+                            "deadlocks": dl}
+
+                cur.execute(
+                    "UPDATE accounts SET balance = %s, version = version + 1 "
+                    "WHERE id = %s AND version = %s",
+                    (src_bal - amount, src, src_ver),
+                )
+                if cur.rowcount != 1:
+                    conn.rollback()
+                    continue  # version moved under us — retry
+                cur.execute(
+                    "UPDATE accounts SET balance = %s, version = version + 1 "
+                    "WHERE id = %s AND version = %s",
+                    (dst_bal + amount, dst, dst_ver),
+                )
+                if cur.rowcount != 1:
+                    conn.rollback()
+                    continue
+                _record(cur, tid, "b", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt, "deadlocks": dl}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                dl += 1
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "conflict", "retries": MAX_RETRIES,
+            "deadlocks": dl}
+
+
+# ------------------------------------------------ c: atomic conditional write
+def transfer_atomic(conn, tid, src, dst, amount, sync=None):
+    """No read at all. The debit IS the check:
+
+        UPDATE accounts SET balance = balance - x WHERE id = ? AND balance >= x
+
+    InnoDB evaluates the predicate on the current, locked row — there is no
+    snapshot to go stale. rowcount 0 means insufficient funds, atomically.
+    The smallest correct fix, and the one that can't express business logic
+    that needs the read value (fees, limits, fraud checks)."""
+    dl = 0
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE accounts SET balance = balance - %s "
+                    "WHERE id = %s AND balance >= %s",
+                    (amount, src, amount),
+                )
+                if cur.rowcount == 0:
+                    conn.rollback()
+                    return {"ok": False, "reason": "insufficient", "retries": attempt,
+                            "deadlocks": dl}
+                cur.execute(
+                    "UPDATE accounts SET balance = balance + %s WHERE id = %s",
+                    (amount, dst),
+                )
+                _record(cur, tid, "c", src, dst, amount)
+            conn.commit()
+            return {"ok": True, "reason": "", "retries": attempt, "deadlocks": dl}
+        except pymysql.MySQLError as e:
+            conn.rollback()
+            code = e.args[0] if e.args else 0
+            if code in (1205, 1213) and attempt < MAX_RETRIES:
+                dl += 1
+                time.sleep(0.02 * (attempt + 1))
+                continue
+            raise
+    return {"ok": False, "reason": "retries_exhausted", "retries": MAX_RETRIES,
+            "deadlocks": dl}
