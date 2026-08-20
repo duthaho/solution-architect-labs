@@ -16,13 +16,15 @@ import time
 import uuid
 
 import common
+import redis_store
 import strategies
 
 MODE = os.environ.get("MODE", "naive")
 
 
 def main() -> int:
-    handler = strategies.HANDLERS[MODE]
+    legacy = redis_store.LegacyStore() if MODE == "legacy" else None
+    handler = None if legacy else strategies.HANDLERS[MODE]
     journal = common.journal_path(MODE)
     round_barrier = threading.Barrier(common.WORKERS)
     sync_barrier = threading.Barrier(common.WORKERS)
@@ -30,23 +32,30 @@ def main() -> int:
     lock = threading.Lock()
 
     def worker(w: int) -> None:
-        conn = common.connect()
+        conn = None if legacy else common.connect()
         for rnd in range(common.ROUNDS):
             round_barrier.wait()
             rid = str(uuid.uuid4())
             sync = sync_barrier.wait if MODE == "naive" else None
             t0 = time.monotonic()
-            res = handler(conn, rid, sync=sync)
+            if legacy:
+                res = legacy.reserve(rid)
+            else:
+                res = handler(conn, rid, sync=sync)
             ms = (time.monotonic() - t0) * 1000
             rec = {
-                "mode": MODE, "phase": "mysql", "store": "mysql", "dual": False,
+                "mode": MODE,
+                "phase": "redis" if legacy else "mysql",
+                "store": "redis" if legacy else "mysql",
+                "dual": False,
                 "reservation_id": rid, "ok": res["ok"], "reason": res["reason"],
                 "retries": res["retries"], "round": rnd, "worker": w,
                 "ms": round(ms, 2),
             }
             with lock:
                 results.append(rec)
-        conn.close()
+        if conn:
+            conn.close()
 
     threads = [threading.Thread(target=worker, args=(w,)) for w in range(common.WORKERS)]
     for t in threads:
@@ -57,6 +66,19 @@ def main() -> int:
     for rec in results:
         common.append_jsonl(journal, rec)
 
+    acks = sum(1 for r in results if r["ok"])
+    rejects = len(results) - acks
+    retries = sum(r["retries"] for r in results)
+
+    if legacy:
+        remaining = legacy.remaining()
+        common.log.info(
+            "MODE=legacy demand=%d acks=%d rejects=%d | redis remaining=%d -> %s",
+            len(results), acks, rejects, remaining,
+            "ok" if remaining >= 0 and acks == common.CAPACITY else "BROKEN",
+        )
+        return 0 if remaining >= 0 and acks == common.CAPACITY else 1
+
     conn = common.connect()
     with conn.cursor() as cur:
         cur.execute(
@@ -66,9 +88,6 @@ def main() -> int:
     capacity, reserved, sold = common.item_row(conn)
     conn.close()
 
-    acks = sum(1 for r in results if r["ok"])
-    rejects = len(results) - acks
-    retries = sum(r["retries"] for r in results)
     oversold = consumed > capacity
     common.log.info(
         "MODE=%s demand=%d acks=%d rejects=%d retries=%d | reservations=%d "
