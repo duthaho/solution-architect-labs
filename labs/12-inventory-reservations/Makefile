@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3318
 export REDIS_PORT ?= 6390
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry
+.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry locks
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -45,3 +45,6 @@ sweep: ## Release reservations past their TTL
 
 drill-expiry: ## Exhaust pool with 1s TTLs, sweep, prove capacity returns
 	$(PY) scripts/drill_expiry.py
+
+locks: ## Show record locks: composite-PK claim vs secondary-index claim
+	$(PY) scripts/locks.py
