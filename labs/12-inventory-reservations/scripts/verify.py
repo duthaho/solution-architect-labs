@@ -21,8 +21,8 @@ def main() -> int:
     capacity = seed["capacity"]
 
     journal: list[dict] = []
-    for mode in common.MODES:
-        journal.extend(common.read_jsonl(common.journal_path(mode)))
+    for key in common.JOURNALS:
+        journal.extend(common.read_jsonl(common.journal_path(key)))
     acks = [r for r in journal if r["ok"]]
     mysql_acks = [r for r in acks if r["store"] == "mysql"]
     redis_acks = [r for r in acks if r["store"] == "redis"]

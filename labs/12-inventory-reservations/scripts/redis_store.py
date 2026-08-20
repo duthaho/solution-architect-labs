@@ -45,3 +45,17 @@ class LegacyStore:
 
     def acked_ids(self) -> set[str]:
         return set(self.r.smembers(common.REDIS_KEY + ":acks"))
+
+
+def compare_stores(conn, store: LegacyStore) -> tuple[set[str], set[str]]:
+    """The shadow-mode comparator: which reservation_ids does one store have
+    that the other doesn't? Returns (only_in_redis, only_in_mysql)."""
+    redis_ids = store.acked_ids()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT reservation_id FROM reservations "
+            "WHERE item_id = %s AND state IN ('active','committed')",
+            (common.ITEM_ID,),
+        )
+        mysql_ids = {row[0] for row in cur.fetchall()}
+    return redis_ids - mysql_ids, mysql_ids - redis_ids

@@ -28,6 +28,7 @@ TTL_S = int(os.environ.get("TTL_S", "120"))
 
 MODES = ("naive", "a", "b", "c", "legacy")
 PHASES = ("redis", "shadow", "mysql")
+JOURNALS = MODES + ("shadow", "cutover")
 
 SEED_PATH = LAB_DIR / "seed.json"
 PHASE_PATH = LAB_DIR / "phase.txt"
