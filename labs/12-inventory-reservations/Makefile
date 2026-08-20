@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3318
 export REDIS_PORT ?= 6390
 MODE ?= naive
 
-.PHONY: help up down clean install
+.PHONY: help up down clean install bootstrap seed
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -24,3 +24,9 @@ clean: ## Stop containers, drop volumes, remove artifacts
 install: ## Create venv and install pinned dependencies
 	@test -d $(VENV) || python3 -m venv $(VENV)
 	$(VENV)/bin/pip install -q -r requirements.txt
+
+bootstrap: ## Apply sql/schema.sql
+	$(PY) scripts/bootstrap.py
+
+seed: ## Reset MySQL + Redis to one item at CAPACITY, phase=redis
+	$(PY) scripts/seed.py
