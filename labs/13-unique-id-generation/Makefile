@@ -5,7 +5,7 @@ PY := $(VENV)/bin/python
 export MYSQL_PORT ?= 3319
 export REDIS_PORT ?= 6391
 
-.PHONY: help up down clean install bootstrap selftest drill-clock drill-exhaustion drill-zombie drill-zombie-naive verify verify-naive bench bench-btree
+.PHONY: help up down clean install bootstrap selftest drill-clock drill-exhaustion drill-zombie drill-zombie-naive verify verify-naive bench bench-btree demo
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -54,3 +54,26 @@ bench: ## Snowflake vs UUIDv4/v7 vs AUTO_INCREMENT vs Redis INCR (multi-process)
 
 bench-btree: ## Insert N rows keyed uuid4 vs uuid7 vs snowflake: locality, measured
 	$(PY) scripts/bench_btree.py
+
+demo: ## The full story end-to-end: bug -> policies -> zombie -> gate -> benches
+	$(MAKE) up install bootstrap
+	rm -f *.jsonl clock.txt
+	@echo && echo "=== 1. the layout, proven (and the selftest proven non-vacuous) ==="
+	$(MAKE) selftest
+	@echo && echo "=== 2. the clock runs backwards: naive duplicates; error/wait/hold do not ==="
+	$(MAKE) drill-clock
+	@echo && echo "=== 3. sequence exhaustion: naive wraps in place; hardened spins to the next ms ==="
+	$(MAKE) drill-exhaustion
+	@echo && echo "=== 4. the gate CATCHES the naive journals (inverted proof) ==="
+	$(MAKE) verify-naive
+	@echo && echo "=== 5. the zombie worker, unguarded: reclaimed id, guaranteed collision ==="
+	$(MAKE) drill-zombie-naive
+	@echo && echo "=== 6. the zombie worker, leased: id reused, zero duplicates ==="
+	$(MAKE) drill-zombie
+	@echo && echo "=== 7. the invariant gate: unique, monotonic, decodable, exclusive leases ==="
+	$(MAKE) verify
+	@echo && echo "=== 8. generation bench: snowflake vs uuid4/uuid7 vs autoinc vs redis INCR ==="
+	$(MAKE) bench
+	@echo && echo "=== 9. B-tree locality: what the PK choice does to the index ==="
+	$(MAKE) bench-btree
+	@echo && echo "demo complete — every gate passed"
