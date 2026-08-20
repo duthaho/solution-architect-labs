@@ -43,7 +43,7 @@ posture, or raw throughput are tagged 🧭 — not lesser, just a different book
 | P10 | Password rotation policy + prevent reuse of old passwords | Security | 🧭 Different track | Hashed-history window, per-user salt, timing. Small; more of an appendix to P09's security track than a standalone data-infra lab. |
 | P11 | Bulk download: 100k+ files (~500GB) → one or many zips, user clicks "Download" | Throughput / Systems | 🧭 Different track | Streaming zip, async job + progress, presigned URLs, backpressure, resumability. Great systems problem, zero data-consistency angle. Separate track. |
 | P12 | Stream LLM responses token-by-token to the client like ChatGPT | Throughput / Systems | 🧭 Different track | SSE / chunked transfer, backpressure, cancellation, token buffering. On-trend but off-identity for this repo. Separate track. |
-| P13 | Flash-sale inventory reservations: prevent oversell on a hot SKU at thousands of reservations/s (Shopify moved this from Redis to MySQL) | Concurrency / Migration | 🎯 Next up | Natural sequel to **Lab 11**: same hot-row contention, but the fix is a *capped pool of reservation rows* claimed via `SELECT … FOR UPDATE SKIP LOCKED`, composite PK to cut lock count, inline replenishment guarded against thundering herd, plus a Redis→MySQL **shadow-mode migration** (dual-write, compare, cut over). Drills: oversell under burst, reservation-TTL expiry, pool exhaustion. Source: [Shopify Engineering](https://shopify.engineering/scaling-inventory-reservations). |
+| P13 | Flash-sale inventory reservations: prevent oversell on a hot SKU at thousands of reservations/s (Shopify moved this from Redis to MySQL) | Concurrency / Migration | ✅ Covered | **Lab 12**. Oversell reproduced deterministically; fixed three ways ending in the SKIP LOCKED capped pool (composite-PK lock evidence via `data_locks`), TTL expiry sweep, plus the full Redis→MySQL shadow-mode migration with mismatch metric and gated mid-burst cutover. Source: [Shopify Engineering](https://shopify.engineering/scaling-inventory-reservations). |
 | P14 | Reshard a live Postgres under traffic: split one overloaded DB into N shards with no downtime and a rollback path | Migration / Sharding | 💡 Candidate | The "lab 09 boss level": logical shards → physical split via replication + verify + cutover; Figma explicitly *rejected double-writes* and kept post-cutover rollback; Notion ran audit dual-writes + comparison scripts to 480 logical shards. Laptop version: 1→2 postgres containers, logical replication, cutover drill with a mid-flight crash. Sources: [Notion](https://www.notion.com/blog/sharding-postgres-at-notion), [Figma](https://www.figma.com/blog/how-figmas-databases-team-lived-to-tell-the-scale/), [Slack/Vitess](https://slack.engineering/scaling-datastores-at-slack-with-vitess/). |
 | P15 | Cache that is provably consistent with the DB: CDC-driven invalidation + shadow verification (Uber CacheFront, 40M→150M reads/s) | Caching / Consistency | 💡 Candidate | Overlaps **Lab 03**'s CDC plumbing but asks a new question: *how stale is your cache, measured?* Binlog-tailing invalidator, write-through protocol, and a shadow mode that reads cache+DB simultaneously and emits a mismatch metric (Uber: 99.99%). Drills: kill the invalidator and watch staleness grow; cache-aside vs CDC-invalidate benchmarked. Source: [Uber Engineering](https://www.uber.com/blog/how-uber-serves-over-40-million-reads-per-second-using-an-integrated-cache/). |
 | P16 | Hot partition on a messages store: one huge channel melts the node, latency cascades cluster-wide (Discord, trillions of messages) | Scale / Hot keys | 💡 Candidate | The fix that generalizes is **request coalescing**: a data-service layer that collapses N concurrent identical reads into 1 DB query with consistent routing per key. Reproducible with any partitioned store + Zipfian load; drill: coalescing on/off under a stampede, measure p99 collapse. Pairs with P05's hot-key theme. Source: [Discord Engineering](https://discord.com/blog/how-discord-stores-trillions-of-messages). |
@@ -54,14 +54,11 @@ posture, or raw throughput are tagged 🧭 — not lesser, just a different book
 ## What to build next (recommendation)
 
 Two problems sit squarely in the repo's core and would extend the series
-cleanly, in rough priority order (P04 shipped as **lab 11**):
+cleanly, in rough priority order (P04 shipped as **lab 11**, P13 as **lab 12**):
 
-1. **P13 — flash-sale inventory reservations.** Direct sequel to lab 11 with
-   a real published source (Shopify); adds `SKIP LOCKED`, capped pools, and a
-   shadow-mode datastore migration to the concurrency story.
-2. **P05b — unique ID generation.** Small, self-contained, sharp failure
+1. **P05b — unique ID generation.** Small, self-contained, sharp failure
    drills (clock skew, worker collision). Good "one afternoon" lab.
-3. **P05 — Top-K at scale.** Bigger; introduces approximate data structures
+2. **P05 — Top-K at scale.** Bigger; introduces approximate data structures
    and streaming ingest, a new flavor for the repo.
 
 `P06`/`P07`/`P17` are better handled by **extending labs 08 / 03** than by new
