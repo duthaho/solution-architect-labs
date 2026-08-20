@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3318
 export REDIS_PORT ?= 6390
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst
+.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -39,3 +39,9 @@ verify-naive: ## Inverted gate: exit 0 iff verify FAILS (proves the checker catc
 
 drill-burst: ## Flash-sale burst against the hot item (MODE=naive|a|b|c|legacy)
 	MODE=$(MODE) $(PY) scripts/drill_burst.py
+
+sweep: ## Release reservations past their TTL
+	$(PY) scripts/sweep.py
+
+drill-expiry: ## Exhaust pool with 1s TTLs, sweep, prove capacity returns
+	$(PY) scripts/drill_expiry.py
