@@ -1,0 +1,4 @@
+*.jsonl
+clock.txt
+*.pid
+*.log
