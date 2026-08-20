@@ -6,26 +6,26 @@ exercises exists or while the bug is unfixed, see it fail for the right
 reason; "green" = the documented exit code. All paths relative to
 `labs/13-unique-id-generation/` unless noted.
 
-- [ ] **T1 — Scaffold** [A3, A4]: `docker-compose.yml` (mysql 8.0.43 `:3319`
+- [x] **T1 — Scaffold** [A3, A4]: `docker-compose.yml` (mysql 8.0.43 `:3319`
   as `lab13-mysql`, redis 7.4.1 `:6391` as `lab13-redis`, adminer `:8093`
   profile `ui`), `.gitignore`, `requirements.txt` (PyMySQL + redis, pinned
   same as lab 12), `Makefile` with `help/up/down/clean/install` targets;
   compose healthchecks + `up` uses `docker compose up -d --wait` (lab-12
   pattern). *Verify:* `make up install` exits 0 only when both healthy.
-- [ ] **T2 — Schema + common** [D3, A3]: `sql/schema.sql` (`worker_leases`
+- [x] **T2 — Schema + common** [D3, A3]: `sql/schema.sql` (`worker_leases`
   (worker_id PK, owner, expires_at) **pre-seeded rows 0..15 by bootstrap**
   so claim always has rows to contend for, `seq_autoinc` for the D6 comparison),
   `scripts/common.py` (env config, connect, jsonl journals, percentiles —
   lab-12 pattern), `scripts/bootstrap.py`. Add `bootstrap` target.
   *Verify:* `make bootstrap` exit 0; `SHOW TABLES` lists both.
-- [ ] **T3 — Snowflake core** [D2, D4, D5, A2]: `scripts/snowflake.py` —
+- [x] **T3 — Snowflake core** [D2, D4, D5, A2]: `scripts/snowflake.py` —
   41/10/12 encode/decode, injectable clock, `naive` generator (trusts clock,
   wrapping sequence) and hardened generator with policies `error|wait|hold` +
   spin-to-next-ms. `--selftest` asserts encode/decode round-trip, k-ordering,
   and that selftest FAILS if bits overlap (temporarily broken constant to
   prove it, then fixed). Add `selftest` target. *Verify:* red = round-trip
   assert fails before encode/decode complete; green = `make selftest` exit 0.
-- [ ] **T4 — Lease manager** [D3]: `scripts/lease.py` — claim lowest free
+- [x] **T4 — Lease manager** [D3]: `scripts/lease.py` — claim lowest free
   worker-id row (single txn, owner token), heartbeat renew, local validity
   window (`safe_until = expires_at - margin`, no per-ID round-trip),
   `LeasedGenerator` that refuses to emit past `safe_until` and re-checks
