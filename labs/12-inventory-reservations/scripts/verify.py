@@ -113,6 +113,19 @@ def main() -> int:
             remaining == capacity - len(acked_set) and remaining >= 0,
             f"remaining={remaining} expected={capacity - len(acked_set)}",
         )
+        # C7 — accounted divergence: every Redis ack missing from MySQL must
+        # be one the journal *admitted* failing to dual-write (dual=false).
+        # Divergence is measured and owned, never silently blessed.
+        expected_missing = {
+            r["reservation_id"] for r in redis_acks if not r.get("dual")
+        }
+        actual_missing = acked_set - db_ids
+        check(
+            "cross-store-accounted",
+            actual_missing == expected_missing,
+            f"missing-from-mysql={len(actual_missing)} "
+            f"journaled-as-not-dual-written={len(expected_missing)}",
+        )
 
     # C6 — cross-store: dual-written Redis acks must have their MySQL row;
     # total acks across stores never exceed capacity.

@@ -9,9 +9,9 @@
 --   must be able to oversell so the verifier can catch it.
 --
 -- * `reservations` is the applied-work journal, keyed by the CLIENT-generated
---   reservation_id (UUID). It doubles as the idempotency key for the shadow
---   migration: dual-writes and retries INSERT IGNORE on this PK, so a retry
---   can never create a second row. Lifecycle: active -> committed | expired.
+--   reservation_id (UUID). The PK is the idempotency guard for dual-writes
+--   and retries: a duplicate write collides on the PK instead of silently
+--   double-booking. Lifecycle: active -> committed | expired.
 --   Release-after-commit (refunds) is out of scope.
 --
 -- * `slots` is the Shopify-style capped pool (strategy c): exactly `capacity`

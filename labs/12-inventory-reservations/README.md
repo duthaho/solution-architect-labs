@@ -82,11 +82,13 @@ hottest path in the system.
 
 ### Reservation lifecycle
 
-`active → committed` (buyer pays) or `active → expired` (TTL passes, sweep
-returns the capacity). The sweep is idempotent: it counts overdue `active`
-rows, returns counter-mode capacity, frees pool slots, and flips the states
-in one transaction. `make drill-expiry` exhausts the pool with 1-second TTLs,
-sweeps, and proves exactly `capacity` fresh reservations succeed afterwards.
+`active → committed` (buyer pays: `commit_reservation` flips the state and,
+for counter modes, moves the unit `reserved → sold`; a pool slot stays
+claimed — the unit is consumed either way) or `active → expired` (TTL
+passes, sweep returns the capacity). The sweep is idempotent and never
+touches a committed sale. `make drill-expiry` plays the whole lifecycle:
+exhaust the pool with 2-second TTLs, commit 10 into sales, sweep — exactly
+40 come back, and exactly 40 fresh reservations succeed afterwards.
 
 ### The shadow migration
 
@@ -108,6 +110,9 @@ actual reasoning (observability, not Redis bugs).
   and workers proceed against MySQL. Because dual-write kept MySQL current,
   the flip transfers no state. The gate: 48 reservations acked in the Redis
   era + 2 in the MySQL era = exactly capacity, verified across both stores.
+  And the abort path is proven, not assumed: `make drill-cutover-abort`
+  plants a phantom Redis ack before the gate and passes only if the gate
+  **refuses** to flip.
 
 ### The invariant gate
 
@@ -133,6 +138,7 @@ make seed && MODE=c make drill-burst && make verify
 make seed && make drill-expiry && make verify
 make seed && make locks       # 1 record lock (composite PK) vs 2 (secondary)
 make seed && make drill-shadow && make verify
+make seed && make drill-cutover-abort   # gate refuses to flip on divergence
 make seed && make drill-cutover && make verify
 make bench
 make clean         # pristine machine
@@ -148,7 +154,9 @@ c SKIP LOCKED pool        304    16.83    22.26        0        0         0
 ```
 
 Strategy c: ~2.3× the throughput, p95 nearly a third — same machine, same
-workload, the only difference is where the contention lands.
+workload, the only difference is where the contention lands. (Wall time
+includes process startup, so absolute ops/s is understated uniformly; the
+comparison is the signal.)
 
 ## 5. Production checklist — what changes with real money and a pager
 
@@ -204,13 +212,13 @@ workload, the only difference is where the contention lands.
 | `scripts/common.py` | env config, MySQL/Redis connections, journals, phase flag |
 | `scripts/bootstrap.py` | applies the schema |
 | `scripts/seed.py` | resets both stores to one item at CAPACITY, phase=redis |
-| `scripts/strategies.py` | the four MySQL reservation strategies + single-flight replenish |
+| `scripts/strategies.py` | the four MySQL reservation strategies, commit-to-sale, single-flight replenish |
 | `scripts/drill_burst.py` | the flash-sale burst (barrier-synced, deterministic), exit-code contract |
 | `scripts/sweep.py` | idempotent TTL expiry sweep |
-| `scripts/drill_expiry.py` | exhaust → sweep → reclaim, exit-code asserted |
+| `scripts/drill_expiry.py` | the lifecycle drill: exhaust → commit 10 → sweep → reclaim 40, exit-code asserted |
 | `scripts/locks.py` | `performance_schema.data_locks` evidence: composite PK vs secondary index |
 | `scripts/redis_store.py` | legacy Lua reserve (atomic, correct) + the store comparator |
 | `scripts/drill_shadow.py` | dual-write shadow mode; mismatch metric proven non-vacuous |
-| `scripts/drill_cutover.py` | mid-burst source-of-truth flip, gated on 0 mismatches |
+| `scripts/drill_cutover.py` | mid-burst source-of-truth flip, gated on 0 mismatches; `CUTOVER_INJECT=1` proves the abort path |
 | `scripts/bench.py` | a vs b vs c under identical contention |
 | `scripts/verify.py` | the invariant gate; `VERIFY_INVERT=1` for the naive proof |

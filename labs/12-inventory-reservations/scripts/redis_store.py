@@ -7,13 +7,19 @@ counter, unjoinable and unauditable next to the rest of the relational data.
 The lab keeps the legacy store correct on purpose so the migration drills
 can compare stores honestly [A2].
 
-The script also SADDs the reservation_id, giving verify.py an exactly-once
-set to join against.
+The script is idempotent by reservation_id: a retry of an already-acked id
+short-circuits (SISMEMBER) instead of decrementing twice. The acked-ids set
+doubles as verify.py's exactly-once join target. In the legacy model a
+reservation IS the consumption — there is no separate commit step for a bare
+counter, which is precisely the observability gap driving the migration.
 """
 
 import common
 
 RESERVE_LUA = """
+if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then
+  return 1
+end
 local remaining = tonumber(redis.call('GET', KEYS[1]) or '0')
 if remaining <= 0 then
   return 0

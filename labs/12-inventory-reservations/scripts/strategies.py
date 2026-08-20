@@ -171,7 +171,40 @@ def _replenish_single_flight(conn) -> None:
             )
             conn.commit()
         finally:
-            cur.execute("SELECT RELEASE_LOCK('lab12_replenish')")
+            try:
+                cur.execute("SELECT RELEASE_LOCK('lab12_replenish')")
+            except Exception:
+                pass  # dead connection: MySQL frees the lock on disconnect;
+                      # never mask the original error with the release failure
+
+
+def commit_reservation(conn, reservation_id: str) -> bool:
+    """Convert an active reservation into a sale: state -> committed, and for
+    counter modes move the unit from `reserved` to `sold`. Pool mode keeps
+    its slot claimed — the unit is consumed either way. Returns False if the
+    reservation wasn't active (already expired or committed)."""
+    with conn.cursor() as cur:
+        n = cur.execute(
+            "UPDATE reservations SET state = 'committed' "
+            "WHERE reservation_id = %s AND state = 'active'",
+            (reservation_id,),
+        )
+        if n == 0:
+            conn.rollback()
+            return False
+        cur.execute(
+            "SELECT mode FROM reservations WHERE reservation_id = %s",
+            (reservation_id,),
+        )
+        mode = cur.fetchone()[0]
+        if mode in ("naive", "a", "b"):
+            cur.execute(
+                "UPDATE items SET reserved = reserved - 1, sold = sold + 1 "
+                "WHERE id = %s",
+                (common.ITEM_ID,),
+            )
+    conn.commit()
+    return True
 
 
 HANDLERS = {
