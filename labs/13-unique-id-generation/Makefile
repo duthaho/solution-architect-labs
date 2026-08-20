@@ -5,7 +5,7 @@ PY := $(VENV)/bin/python
 export MYSQL_PORT ?= 3319
 export REDIS_PORT ?= 6391
 
-.PHONY: help up down clean install bootstrap
+.PHONY: help up down clean install bootstrap selftest
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -26,3 +26,7 @@ install: ## Create venv and install pinned dependencies
 
 bootstrap: ## Apply sql/schema.sql and seed the worker-lease slots
 	$(PY) scripts/bootstrap.py
+
+selftest: ## Layout round-trip + ordering checks (and the broken-layout catch)
+	SELFTEST_BREAK=1 $(PY) scripts/snowflake.py
+	$(PY) scripts/snowflake.py
