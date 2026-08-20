@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3318
 export REDIS_PORT ?= 6390
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed verify verify-naive
+.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -36,3 +36,6 @@ verify: ## Invariant gate: exit 0 iff no oversell, slots conserved, exactly-once
 
 verify-naive: ## Inverted gate: exit 0 iff verify FAILS (proves the checker catches oversell)
 	VERIFY_INVERT=1 $(PY) scripts/verify.py
+
+drill-burst: ## Flash-sale burst against the hot item (MODE=naive|a|b|c|legacy)
+	MODE=$(MODE) $(PY) scripts/drill_burst.py
