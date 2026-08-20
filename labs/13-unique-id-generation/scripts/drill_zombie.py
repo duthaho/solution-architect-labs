@@ -58,7 +58,7 @@ def journal(role: str) -> "common.Path":
 
 def run_a() -> int:
     """Claim, emit under the lease, get stopped, resume, behave per mode."""
-    conn = common.connect()
+    conn = common.connect(autocommit=True)
     lse = lease_mod.Lease(ttl_ms=TTL_MS, margin_ms=MARGIN_MS, owner="A-zombie")
     wid = lse.claim(conn)
     if wid is None:
@@ -96,7 +96,7 @@ def run_a() -> int:
 
 def run_b() -> int:
     """Claim the expired id, emit B_COUNT ids in phase 2, release, exit."""
-    conn = common.connect()
+    conn = common.connect(autocommit=True)
     lse = lease_mod.Lease(ttl_ms=10_000, margin_ms=300, owner="B-fresh")
     wid = lse.claim(conn)
     if wid is None:

@@ -57,8 +57,17 @@ class Lease:
         })
 
     def claim(self, conn) -> int | None:
-        """Claim the lowest free-or-expired worker id. One transaction."""
+        """Claim the lowest free-or-expired worker id. One transaction.
+
+        Lease connections must be autocommit: heartbeat/release are then
+        single statements committed server-side, so a client frozen
+        mid-operation (SIGSTOP, GC pause) can never keep holding a row lock
+        that blocks other claimants. The claim itself opens an explicit
+        transaction around its SELECT ... FOR UPDATE + UPDATE pair.
+        """
+        assert conn.get_autocommit(), "lease operations require an autocommit connection"
         now = common.now_ms()
+        conn.begin()
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT worker_id FROM worker_leases "
@@ -82,7 +91,11 @@ class Lease:
         return self.worker_id
 
     def heartbeat(self, conn) -> None:
-        """Renew, or learn the lease is lost. 0 matched rows is never a retry."""
+        """Renew, or learn the lease is lost. 0 matched rows is never a retry.
+
+        Single autocommitted statement (see claim); rowcount means *matched*
+        because connections set CLIENT.FOUND_ROWS.
+        """
         now = common.now_ms()
         with conn.cursor() as cur:
             cur.execute(
@@ -91,7 +104,6 @@ class Lease:
                 (now + self.ttl_ms, self.worker_id, self.owner),
             )
             matched = cur.rowcount
-        conn.commit()
         if matched != 1:
             self._journal("lost")
             raise LeaseLostError(
@@ -107,7 +119,6 @@ class Lease:
                 "WHERE worker_id = %s AND owner = %s",
                 (self.worker_id, self.owner),
             )
-        conn.commit()
         self._journal("release")
         self.worker_id = None
         self.expires_at = 0
@@ -139,7 +150,7 @@ class LeasedGenerator:
 def demo() -> int:
     """Two claimants get different ids; an expired lease is reclaimable."""
     ttl, margin = 1200, 300
-    conn = common.connect()
+    conn = common.connect(autocommit=True)
 
     a, b = Lease(ttl, margin), Lease(ttl, margin)
     wa, wb = a.claim(conn), b.claim(conn)

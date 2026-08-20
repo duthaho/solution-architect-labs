@@ -9,7 +9,11 @@ Two generators live here:
   ``error`` (refuse), ``wait`` (sleep out regressions up to WAIT_MAX_MS,
   refuse beyond), ``hold`` (keep issuing at last_ts from the remaining
   sequence, spilling forward only when it exhausts). Sequence exhaustion
-  always spins to the next millisecond. Output is strictly monotonic.
+  always spins to the next millisecond; the spin is bounded only if the
+  clock advances — true for any real clock (and for ``hold`` after a
+  regression, bounded by the regression length), but a ScriptedClock must
+  script its own recovery or the spin never returns. Output is strictly
+  monotonic.
 
 Clocks are injectable (any ``() -> unix_ms`` callable) — that is what makes
 every drill in this lab deterministic. ``ScriptedClock`` replays a fixed

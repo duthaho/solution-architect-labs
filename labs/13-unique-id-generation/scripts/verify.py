@@ -81,12 +81,16 @@ def check_leases() -> list[str]:
             intervals[wid].append((s["start"], s["end"], owner))
     failures = []
     for wid, ivs in intervals.items():
-        ivs.sort()
-        for (s1, e1, o1), (s2, e2, o2) in zip(ivs, ivs[1:]):
-            if o1 != o2 and s2 < e1:
-                failures.append(
-                    f"worker id {wid}: {o1} (until {e1}) overlaps {o2} (from {s2})"
-                )
+        # All pairs, not just sort-adjacent ones: a long first interval can
+        # overlap an interval that isn't its immediate successor.
+        for i in range(len(ivs)):
+            s1, e1, o1 = ivs[i]
+            for s2, e2, o2 in ivs[i + 1:]:
+                if o1 != o2 and max(s1, s2) < min(e1, e2):
+                    failures.append(
+                        f"worker id {wid}: {o1} [{s1},{e1}) overlaps "
+                        f"{o2} [{s2},{e2})"
+                    )
     return failures
 
 

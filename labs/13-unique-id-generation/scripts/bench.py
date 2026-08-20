@@ -54,7 +54,7 @@ def make_maker(scheme: str, conn_holder: dict):
     if scheme == "snowflake":
         import lease as lease_mod
 
-        conn = common.connect()
+        conn = common.connect(autocommit=True)
         conn_holder["cleanup"] = lambda: (lse.release(conn), conn.close())
         lse = lease_mod.Lease()
         if lse.claim(conn) is None:
@@ -81,15 +81,19 @@ def worker(scheme: str, w: int, n: int) -> None:
     maker = make_maker(scheme, holder)
     lease_conn = holder.get("lease")
     out = []
-    heartbeat_every = max(1, n // 4)
-    for i in range(n):
+    # Time-based heartbeats: a count-based cadence would couple lease
+    # survival (and thus the bench's exit code) to interpreter speed.
+    hb_interval = common.LEASE_TTL_MS // 3
+    next_hb = common.now_ms() + hb_interval
+    for _ in range(n):
         t0 = time.monotonic_ns()
         (id_,) = maker()
         t1 = time.monotonic_ns()
         out.append((time.time_ns(), id_, t1 - t0))
-        if lease_conn and (i + 1) % heartbeat_every == 0:
+        if lease_conn and common.now_ms() >= next_hb:
             lse, conn = lease_conn
             lse.heartbeat(conn)
+            next_hb = common.now_ms() + hb_interval
     with bench_path(scheme, w).open("w") as f:
         for t, id_, dt in out:
             f.write(f'{{"t": {t}, "id": {id_}, "ns": {dt}}}\n')

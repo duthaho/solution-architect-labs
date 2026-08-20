@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import pymysql
+from pymysql.constants import CLIENT
 
 LAB_DIR = Path(__file__).resolve().parent.parent
 
@@ -35,7 +36,13 @@ log = logging.getLogger("lab13")
 
 
 def connect(db: str | None = DB, autocommit: bool = False) -> pymysql.Connection:
-    """MySQL connection; autocommit off by default — transactions are explicit."""
+    """MySQL connection; autocommit off by default — transactions are explicit.
+
+    CLIENT.FOUND_ROWS makes UPDATE rowcount mean rows *matched*, not rows
+    *changed* — without it, a lease heartbeat that lands in the same
+    millisecond as the previous renewal (values unchanged) would read
+    rowcount 0 and falsely report the lease lost.
+    """
     return pymysql.connect(
         host=MYSQL_HOST,
         port=MYSQL_PORT,
@@ -44,6 +51,7 @@ def connect(db: str | None = DB, autocommit: bool = False) -> pymysql.Connection
         database=db,
         autocommit=autocommit,
         charset="utf8mb4",
+        client_flag=CLIENT.FOUND_ROWS,
     )
 
 
