@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3318
 export REDIS_PORT ?= 6390
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry locks drill-shadow drill-cutover bench
+.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry locks drill-shadow drill-cutover bench demo
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -57,3 +57,28 @@ drill-cutover: ## Flip source of truth Redis->MySQL mid-burst, gated on 0 mismat
 
 bench: ## Compare strategies a/b/c under identical contention (fresh reseed each)
 	$(PY) scripts/bench.py
+
+demo: ## The full story end-to-end: bug -> three fixes -> expiry -> locks -> migration -> bench
+	$(MAKE) up install bootstrap seed
+	@echo && echo "=== 1. the bug: naive check-then-write oversells ==="
+	$(MAKE) drill-burst MODE=naive
+	$(MAKE) verify-naive
+	@echo && echo "=== 2. fix a: FOR UPDATE on the counter row ==="
+	$(MAKE) seed && $(MAKE) drill-burst MODE=a && $(MAKE) verify
+	@echo && echo "=== 3. fix b: atomic conditional UPDATE ==="
+	$(MAKE) seed && $(MAKE) drill-burst MODE=b && $(MAKE) verify
+	@echo && echo "=== 4. fix c: capped pool + SKIP LOCKED (Shopify) ==="
+	$(MAKE) seed && $(MAKE) drill-burst MODE=c && $(MAKE) verify
+	@echo && echo "=== 5. reservations expire: TTL sweep returns capacity ==="
+	$(MAKE) seed && $(MAKE) drill-expiry && $(MAKE) verify
+	@echo && echo "=== 6. why the composite PK: lock evidence ==="
+	$(MAKE) seed && $(MAKE) locks
+	@echo && echo "=== 7. legacy store: Redis is correct but unjoinable ==="
+	$(MAKE) seed && $(MAKE) drill-burst MODE=legacy && $(MAKE) verify
+	@echo && echo "=== 8. shadow mode: dual-write + mismatch metric ==="
+	$(MAKE) seed && $(MAKE) drill-shadow && $(MAKE) verify
+	@echo && echo "=== 9. cutover mid-burst: flip Redis->MySQL, lose nothing ==="
+	$(MAKE) seed && $(MAKE) drill-cutover && $(MAKE) verify
+	@echo && echo "=== 10. bench: a vs b vs c ==="
+	$(MAKE) bench
+	@echo && echo "demo complete — every gate passed"
