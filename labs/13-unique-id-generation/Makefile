@@ -5,7 +5,7 @@ PY := $(VENV)/bin/python
 export MYSQL_PORT ?= 3319
 export REDIS_PORT ?= 6391
 
-.PHONY: help up down clean install bootstrap selftest drill-clock drill-exhaustion drill-zombie drill-zombie-naive verify verify-naive
+.PHONY: help up down clean install bootstrap selftest drill-clock drill-exhaustion drill-zombie drill-zombie-naive verify verify-naive bench
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -48,3 +48,6 @@ drill-zombie: ## SIGSTOP a leased worker past TTL, reuse its id, prove zero dupl
 
 drill-zombie-naive: ## Same drill with the lease check disabled: the collision, reproduced
 	ZOMBIE_NAIVE=1 $(PY) scripts/drill_zombie.py
+
+bench: ## Snowflake vs UUIDv4/v7 vs AUTO_INCREMENT vs Redis INCR (multi-process)
+	$(PY) scripts/bench.py
