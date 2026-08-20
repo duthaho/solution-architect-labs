@@ -33,7 +33,7 @@ reason; "green" = the documented exit code. All paths relative to
   `lease_events.jsonl`** (verify's input). *Verify:* inline demo
   `python scripts/lease.py`: two claimants get different ids; expired lease
   is reclaimable; exit 0.
-- [ ] **T5 — Zombie drill (riskiest)** [D3, A2, acceptance 3]:
+- [x] **T5 — Zombie drill (riskiest)** [D3, A2, acceptance 3]:
   `scripts/drill_zombie.py` — multiprocess: worker A claims id, journals IDs
   to `ids_zombie_a.jsonl`, SIGSTOP past TTL; B claims the same worker id,
   journals to `ids_zombie_b.jsonl`; SIGCONT A → A must detect the lost lease
@@ -45,7 +45,7 @@ reason; "green" = the documented exit code. All paths relative to
   count is 0; naive mode inverts (exit 0 iff duplicates reproduced). Add
   `drill-zombie` / `drill-zombie-naive` targets. *Verify:* both targets exit
   0, three runs in a row.
-- [ ] **T6 — Clock drill** [D4, A2, acceptance 2]: `scripts/drill_clock.py` —
+- [x] **T6 — Clock drill** [D4, A2, acceptance 2]: `scripts/drill_clock.py` —
   clock = real time + scripted offset; the injected backwards jump is
   **smaller than the `wait` policy's bound (`WAIT_MAX_MS`), so `wait`
   provably terminates** (real time keeps flowing under the offset); run
@@ -55,14 +55,14 @@ reason; "green" = the documented exit code. All paths relative to
   produced ≥1 duplicate AND `error` raised ≥1 AND `wait`/`hold` produced
   their expected counts with 0 dupes. Add `drill-clock` target. *Verify:*
   `make drill-clock` exit 0, naive dupes every run.
-- [ ] **T7 — Exhaustion drill** [D5, A2]: `scripts/drill_exhaustion.py` —
+- [x] **T7 — Exhaustion drill** [D5, A2]: `scripts/drill_exhaustion.py` —
   scripted clock **frozen for the first 5000 draws, then auto-advances 1 ms**
   (so hardened spin terminates deterministically); request >4096 IDs in one
   logical ms: naive wraps (duplicates), hardened spins to next ms (no dupes,
   correct count). Journals `ids_exhaustion_{naive,hardened}.jsonl`. Exit 0
   iff both observed. Add `drill-exhaustion` target. *Verify:* exit 0,
   deterministic, terminates < 30 s.
-- [ ] **T8 — Invariant gate** [D8]: `scripts/verify.py` — inputs are explicit:
+- [x] **T8 — Invariant gate** [D8]: `scripts/verify.py` — inputs are explicit:
   all `ids_*.jsonl` **except** `ids_*naive*.jsonl`, plus `lease_events.jsonl`.
   Asserts: global uniqueness, per-worker strict monotonicity, decode(id)
   matches journaled worker/ts, no two owners' lease windows overlap for the
@@ -70,7 +70,7 @@ reason; "green" = the documented exit code. All paths relative to
   journals and exits 0 iff they violate. Targets `verify` / `verify-naive`.
   *Verify:* after T5–T7 → `make verify` exit 0 AND `make verify-naive` exit 0
   (naive journals exist and are caught).
-- [ ] **T9 — Alternatives + generation bench** [D6]: `scripts/alternatives.py`
+- [x] **T9 — Alternatives + generation bench** *(metric changed adjacent-inversion → normalized rank displacement: at 170k uuid7/s thousands share a ms, so adjacent pairs are random-bit comparisons and the uuid4 margin was luck; displacement is the actual B-tree locality story and separates ~200×)* [D6]: `scripts/alternatives.py`
   (uuid4, RFC-9562 UUIDv7 impl ~20 lines, MySQL `AUTO_INCREMENT` insert,
   Redis `INCR`), `scripts/bench.py` — WORKERS processes × N ids per scheme:
   ops/s, p50/p95, bits/text len, merged-stream adjacent-inversion fraction.
@@ -79,26 +79,26 @@ reason; "green" = the documented exit code. All paths relative to
   uuid7/snowflake < uuid4 inversion fraction — structural, not timing);
   throughput numbers are informational, narrated in the README. *Verify:*
   `make bench` completes ≲2 min, table printed.
-- [ ] **T10 — B-tree bench** [D7]: `scripts/bench_btree.py` — fixed dataset
+- [x] **T10 — B-tree bench** [D7]: `scripts/bench_btree.py` — fixed dataset
   (same N rows, same payload, single-column PK difference only): `BINARY(16)`
   uuid4 / uuid7, `BIGINT` snowflake; report rows/s + index size
   (`information_schema.innodb_tablespaces` or `SHOW TABLE STATUS`).
   **Exit 0 = ran to completion and printed the table** — relative speed is
   environment-sensitive and is narrated, not gated. Add `bench-btree`
   target. *Verify:* ≲2 min, table printed.
-- [ ] **T11 — `make demo` wiring** [acceptance 1]: full story: up→install→
+- [x] **T11 — `make demo` wiring** [acceptance 1]: full story: up→install→
   bootstrap→selftest→drill-clock→drill-exhaustion (**these leave the
   `ids_*naive*.jsonl` journals in place**)→verify-naive→drill-zombie-naive→
   drill-zombie→verify→bench→bench-btree, numbered `=== N. ===` echoes
   (lab-12 style). *Verify:* fresh `make clean && make demo` exit 0.
-- [ ] **T12 — Lab README** [acceptance 6]: `README.md` in series shape:
+- [x] **T12 — Lab README** [acceptance 6]: `README.md` in series shape:
   problem → architecture ASCII → deep dive (bit layout, lease safety
   argument, clock policies, why sortable PKs) → runbook with real captured
   output/bench numbers → production checklist → 10 interview questions →
   file map. *Verify:* every runbook command exists in the Makefile.
-- [ ] **T13 — Repo docs** [acceptance 5]: repo `README.md` lab-13 row;
+- [x] **T13 — Repo docs** [acceptance 5]: repo `README.md` lab-13 row;
   `BACKLOG.md` P05b → ✅ Covered with mapping + update "what to build next".
   *Verify:* git diff shows only those edits.
-- [ ] **T14 — End-to-end check** [spec E2E]:
+- [x] **T14 — End-to-end check** [spec E2E]:
   `cd labs/13-unique-id-generation && make demo && make clean`, both exit 0;
   `docker ps` empty of lab13, no stray artifacts.
