@@ -6,7 +6,7 @@ export MYSQL_PORT ?= 3318
 export REDIS_PORT ?= 6390
 MODE ?= naive
 
-.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry locks drill-shadow drill-cutover
+.PHONY: help up down clean install bootstrap seed verify verify-naive drill-burst sweep drill-expiry locks drill-shadow drill-cutover bench
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -54,3 +54,6 @@ drill-shadow: ## Dual-write shadow mode + comparator (clean, then injected diver
 
 drill-cutover: ## Flip source of truth Redis->MySQL mid-burst, gated on 0 mismatches
 	$(PY) scripts/drill_cutover.py
+
+bench: ## Compare strategies a/b/c under identical contention (fresh reseed each)
+	$(PY) scripts/bench.py
