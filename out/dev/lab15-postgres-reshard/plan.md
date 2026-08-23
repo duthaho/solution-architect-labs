@@ -91,7 +91,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   *Verify:* bench completes and prints both timings (README cites the
   Notion/Figma expectation; no hard assertion on which wins — hardware
   varies).
-- [ ] **T12 — Demo target.** Makefile `demo`: clean-slate orchestration of
+- [x] **T12 — Demo target.** Makefile `demo`: clean-slate orchestration of
   the full story (up → bootstrap → seed → traffic → replicate → drill-naive
   → reset-shards → gated cutover → **verify** (post-cutover, shards
   authoritative) → drill-sequence → drill-rollback (does its own proof;

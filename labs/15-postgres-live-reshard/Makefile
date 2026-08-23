@@ -6,7 +6,7 @@ export MONO_PORT ?= 5440
 export SHARD0_PORT ?= 5441
 export SHARD1_PORT ?= 5442
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive cutover drill-sequence drill-rollback verify verify-naive bench-index
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive cutover drill-sequence drill-rollback verify verify-naive bench-index demo
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -69,3 +69,28 @@ verify-naive: ## Inverted gate: exit 0 iff the naive drill's damage is real, rec
 
 bench-index: ## Initial-sync time: secondary indexes kept vs dropped + rebuilt
 	$(PY) scripts/bench_index.py
+
+demo: ## The full story end-to-end: bench -> naive loss -> gated cutover -> rollback
+	$(MAKE) up install bootstrap seed
+	rm -f *.jsonl
+	@echo && echo "=== 1. how fast can the initial copy go? (the Notion/Figma index trick) ==="
+	$(MAKE) bench-index
+	@echo && echo "=== 2. logical replication: filtered publications, initial sync, streaming ==="
+	$(MAKE) replicate replicate-status
+	@echo && echo "=== 3. the naive cutover: flip mid-lag, decommission, count the bodies ==="
+	$(MAKE) drill-naive
+	@echo && echo "=== 4. the gate CATCHES it: the naive damage, recounted (inverted proof) ==="
+	$(MAKE) verify-naive
+	@echo && echo "=== 5. back to baseline: shards resynced from scratch ==="
+	$(MAKE) reset-shards
+	@echo && echo "=== 6. the gated cutover: quiesce -> LSN gate -> flip streams -> flip routing ==="
+	$(MAKE) cutover
+	@echo && echo "=== 7. the invariant gate, post-cutover: checksums, boundaries, journal replay ==="
+	$(MAKE) verify
+	@echo && echo "=== 8. what replication never carried: the sequence trap, and the fix ==="
+	$(MAKE) drill-sequence
+	@echo && echo "=== 9. the rollback that works AFTER the cutover: the reverse stream pays out ==="
+	$(MAKE) drill-rollback
+	@echo && echo "=== 10. the gate again, post-rollback: every acked write accounted for ==="
+	$(MAKE) verify
+	@echo && echo "demo complete — every gate passed"
