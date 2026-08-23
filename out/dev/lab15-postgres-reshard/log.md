@@ -12,3 +12,4 @@
 - 2026-08-23 · T2 scaffold: compose (3× postgres:17.11, wal_level=logical, healthchecks), Makefile skeleton, psycopg 3.2.10 pinned; up→healthy, clean→pristine verified
 - 2026-08-23 · T3 schema+common+bootstrap: docs table, shardkey unique index + REPLICA IDENTITY USING INDEX verified on all 3 nodes via \d docs
 - 2026-08-23 · T4 seed(500k/14.8s)+router+traffic: 1106 journaled acked writes in 8s, all→mono; insert path auto-freezes when shards authoritative (pre-sequence-fix safety)
+- 2026-08-23 · T5 replicate.py: row-filtered pubs+subs, initial 500k sync ~7s under traffic, wait-lsn gate (publisher replay_lsn) ~120ms; counts converge

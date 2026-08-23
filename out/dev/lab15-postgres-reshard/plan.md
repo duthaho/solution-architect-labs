@@ -35,7 +35,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   [D3, A2]
   *Verify:* `make seed` row count; `make traffic-start`/`traffic-stop`
   journals acked writes routed to mono.
-- [ ] **T5 — Replication setup.** `scripts/replicate.py`: row-filtered
+- [x] **T5 — Replication setup.** `scripts/replicate.py`: row-filtered
   publications on mono (per shard), subscriptions on shard0/1 with
   `copy_data`, `status` subcommand printing per-shard lag +
   `wait-lsn` subcommand (per T1: publisher `pg_stat_replication.replay_lsn

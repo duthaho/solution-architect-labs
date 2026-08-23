@@ -6,7 +6,7 @@ export MONO_PORT ?= 5440
 export SHARD0_PORT ?= 5441
 export SHARD1_PORT ?= 5442
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -39,3 +39,9 @@ traffic-start: ## Start continuous journaled write traffic in the background
 traffic-stop: ## Stop background traffic
 	@test -f traffic.pid && kill $$(cat traffic.pid) 2>/dev/null || true
 	@sleep 1 && rm -f traffic.pid && echo "traffic stopped"
+
+replicate: ## Create row-filtered publications + subscriptions, wait for initial sync
+	$(PY) scripts/replicate.py setup
+
+replicate-status: ## Per-shard replication state, lag, and row counts
+	$(PY) scripts/replicate.py status
