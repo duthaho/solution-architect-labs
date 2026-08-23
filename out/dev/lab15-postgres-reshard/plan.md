@@ -68,7 +68,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   `drill-sequence`. [D2.3]
   *Verify:* deterministic duplicate-key error pre-fix, clean inserts
   post-fix, and disjoint ID sets minted by shard0 vs shard1.
-- [ ] **T9 — Rollback drill.** `scripts/drill_rollback.py`: after cutover
+- [x] **T9 — Rollback drill.** `scripts/drill_rollback.py`: after cutover
   *and after T8's interleaved-sequence fix* (collision-free IDs are the
   precondition for conflict-free reverse apply), drop forward subs, create
   reverse pubs on shards + subs on mono; take N journaled writes on shards;

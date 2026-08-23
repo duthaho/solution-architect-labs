@@ -15,7 +15,10 @@ class Router:
     def __init__(self, gate_timeout=60.0):
         self.gate_timeout = gate_timeout
 
-    def node_for_write(self, workspace_id):
+    def route_write(self, workspace_id):
+        """Block while the gate is held, then resolve node AND state from the
+        same post-gate snapshot — an op that entered the gate must come out
+        the other side routed by the world as it is, not as it was."""
         deadline = time.monotonic() + self.gate_timeout
         while True:
             state = read_router_state()
@@ -25,8 +28,8 @@ class Router:
                 raise GateTimeout("write gate held longer than gate_timeout")
             time.sleep(0.05)
         if state["authoritative"] == "mono":
-            return "mono"
-        return shard_for(workspace_id)
+            return "mono", state
+        return shard_for(workspace_id), state
 
     def node_for_read(self, workspace_id):
         state = read_router_state()

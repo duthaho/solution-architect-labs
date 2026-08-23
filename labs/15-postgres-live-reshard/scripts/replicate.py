@@ -94,6 +94,10 @@ def reset():
     for shard in SHARDS:
         with conn(shard) as c:
             c.execute("TRUNCATE docs")
+            # truncate keeps sequence state: restore the pristine post-copy
+            # world (sequence at its start value) or the drills lose their
+            # deterministic reproduction on a second pass
+            c.execute("ALTER SEQUENCE docs_id_seq RESTART WITH 1 INCREMENT BY 1")
     JOURNAL.unlink(missing_ok=True)
     log.info("shards truncated, replication cleared, journal reset — re-establishing")
     setup()

@@ -17,16 +17,24 @@ def seq_last_values():
     return out
 
 
-def try_insert(node, ws):
-    with conn(node) as c:
+def try_insert(node, ws, keep=False):
+    """Trap inserts run in a transaction we ROLL BACK: logical replication
+    ships only committed transactions, so the deliberate duplicates never
+    reach the reverse stream that is already feeding mono."""
+    with conn(node, autocommit=False) as c:
         try:
             row = c.execute(
                 "INSERT INTO docs (workspace_id, title, body) "
                 "VALUES (%s, 'seq-drill', 'seq-drill') RETURNING id",
                 (ws,),
             ).fetchone()
+            if keep:
+                c.commit()
+            else:
+                c.rollback()
             return row[0], None
         except psycopg.errors.UniqueViolation as e:
+            c.rollback()
             return None, str(e).splitlines()[0]
 
 
@@ -57,7 +65,6 @@ def global_max():
 def main():
     if read_router_state()["authoritative"] != "shards":
         raise SystemExit("run after the gated cutover: shards must be authoritative")
-    trap_rows = []
 
     print("\n--- 1. the trap: shard sequences never moved ---")
     for shard, last in seq_last_values().items():
@@ -71,7 +78,6 @@ def main():
             failures += 1
         else:
             dup_on = exists_globally(doc_id, exclude=shard)
-            trap_rows.append((shard, doc_id))
             if dup_on:
                 print(f"{shard}: INSERT → id {doc_id} 'succeeded' — but id {doc_id} "
                       f"already exists on {dup_on}: a SILENT global duplicate")
@@ -90,16 +96,12 @@ def main():
     for i, shard in enumerate(SHARDS):
         doc_id, err = try_insert(shard, i)
         ids[shard] = doc_id
-        if doc_id is not None:
-            trap_rows.append((shard, doc_id))
     print(f"next ids minted: {ids}")
     if len(set(ids.values())) < len(ids):
         print("❌ both shards minted the SAME id — global uniqueness is gone")
     else:
         print(f"❌ ids differ this time only because local maxima differ — both "
               f"sequences now race up the same range")
-
-    cleanup(trap_rows)
 
     print("\n--- 3. the fix that holds: interleaved sequences ---")
     base = global_max() + 1
@@ -113,7 +115,7 @@ def main():
     minted = {s: [] for s in SHARDS}
     for _ in range(10):
         for i, shard in enumerate(SHARDS):
-            doc_id, err = try_insert(shard, i)
+            doc_id, err = try_insert(shard, i, keep=True)
             if err:
                 print(f"❌ {shard}: unexpected collision after fix: {err}")
                 raise SystemExit(1)

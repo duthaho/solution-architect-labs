@@ -38,19 +38,21 @@ class Traffic:
 
     def one_op(self):
         ws = self.rng.randrange(N_WORKSPACES)
+        want_insert = self.rng.random() < 0.3
+        node, state = self.router.route_write(ws)  # blocks while gate is held
         # The insert path mints ids from the local sequence; until the
         # post-cutover sequence fix (drill_sequence) the shard sequences
         # collide with existing ids, so inserts stay on the runbook's
         # "frozen until sequences fixed" rule unless a drill forces them.
-        state = read_router_state()
+        # Node and state come from one post-gate snapshot: an op that entered
+        # the gate must not exit routed by the pre-flip world.
         insert_ok = (
             state["authoritative"] == "mono"
             or state.get("sequences_fixed")
             or FORCE_INSERTS
         )
-        do_insert = insert_ok and self.rng.random() < 0.3
+        do_insert = want_insert and insert_ok
         if do_insert:
-            node = self.router.node_for_write(ws)
             c = self._conn(node)
             row = c.execute(
                 "INSERT INTO docs (workspace_id, title, body) "
@@ -61,7 +63,7 @@ class Traffic:
         else:
             doc_id = self.rng.randrange(1, N_ROWS + 1)
             ws = doc_id % N_WORKSPACES
-            node = self.router.node_for_write(ws)
+            node, _ = self.router.route_write(ws)
             c = self._conn(node)
             row = c.execute(
                 "UPDATE docs SET rev = rev + 1, updated_at = now() "

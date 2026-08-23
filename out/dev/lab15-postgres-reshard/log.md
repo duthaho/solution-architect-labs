@@ -16,3 +16,9 @@
 - 2026-08-23 · T6 drill-naive: 405 acked writes damaged (128 missing / 277 stale) via injected stall + ungated flip + decommission; reset-shards restores exact baseline
 - 2026-08-23 · T7 gated cutover: 439ms pause, 0/246 acked writes lost under live traffic
 - 2026-08-23 · T8 drill-sequence: silent global dup (shard0 id=1) + loud dup-key (shard1) + setval trap + interleaved fix (disjoint parity, 20 inserts). Design correction for T9: reverse stream must be created INSIDE the cutover gate (drop forward subs first — loop risk; gap risk otherwise)
+- 2026-08-23 · T9 drill-rollback shipped, after three real bugs the chain surfaced:
+  1. reverse stream must be armed INSIDE the cutover gate (post-flip writes predate a later slot; live forward subs would loop reverse rows) — cutover.py now flips streams under the gate
+  2. sequence-drill trap rows poisoned the reverse sub (committed dup INSERT reverse-applied to mono = permanent PK conflict) — traps now run in ROLLED-BACK txns (logical replication ships only commits)
+  3. router raced gate flips twice (op type then node computed from different snapshots) — route_write() now returns node+state from one post-gate snapshot; reset-shards also restarts shard seqs (truncate keeps them)
+  4. bonus lesson: rollback must re-sync mono's sequence above shard-minted ids (the sequence trap, mirrored) — now a rollback step
+  Clean bootstrap→rollback chain: cutover 0/256 lost, rollback 0/521 lost (173 inserts), zero warnings
