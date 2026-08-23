@@ -28,7 +28,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   shard_for(workspace_id)), `scripts/bootstrap.py` applies schema to all 3.
   [D5, D6, A2]
   *Verify:* `make bootstrap` then `\d docs` on all 3 containers.
-- [ ] **T4 — Seed + traffic.** `scripts/seed.py` (~500k seeded rows on mono),
+- [x] **T4 — Seed + traffic.** `scripts/seed.py` (~500k seeded rows on mono),
   `scripts/traffic.py` (continuous seeded inserts/updates through
   `scripts/router.py`; every acked write journaled to `journal.jsonl`;
   router reads atomic `router_state.json`, write-gate flag for quiesce).

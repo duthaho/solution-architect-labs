@@ -6,7 +6,7 @@ export MONO_PORT ?= 5440
 export SHARD0_PORT ?= 5441
 export SHARD1_PORT ?= 5442
 
-.PHONY: help up down clean install bootstrap
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -27,3 +27,15 @@ install: ## Create venv and install pinned dependencies
 
 bootstrap: ## Apply sql/schema.sql to all 3 nodes (drop + recreate, clear replication)
 	$(PY) scripts/bootstrap.py
+
+seed: ## Seed mono with N_ROWS deterministic rows (default 500k)
+	$(PY) scripts/seed.py
+
+traffic-start: ## Start continuous journaled write traffic in the background
+	@test ! -f traffic.pid || (echo "traffic already running (traffic.pid)"; exit 1)
+	@nohup $(PY) scripts/traffic.py >> traffic.log 2>&1 & echo $$! > traffic.pid
+	@echo "traffic started (pid $$(cat traffic.pid))"
+
+traffic-stop: ## Stop background traffic
+	@test -f traffic.pid && kill $$(cat traffic.pid) 2>/dev/null || true
+	@sleep 1 && rm -f traffic.pid && echo "traffic stopped"
