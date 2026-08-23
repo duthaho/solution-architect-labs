@@ -14,3 +14,4 @@
 - 2026-08-23 · T4 seed(500k/14.8s)+router+traffic: 1106 journaled acked writes in 8s, all→mono; insert path auto-freezes when shards authoritative (pre-sequence-fix safety)
 - 2026-08-23 · T5 replicate.py: row-filtered pubs+subs, initial 500k sync ~7s under traffic, wait-lsn gate (publisher replay_lsn) ~120ms; counts converge
 - 2026-08-23 · T6 drill-naive: 405 acked writes damaged (128 missing / 277 stale) via injected stall + ungated flip + decommission; reset-shards restores exact baseline
+- 2026-08-23 · T7 gated cutover: 439ms pause, 0/246 acked writes lost under live traffic

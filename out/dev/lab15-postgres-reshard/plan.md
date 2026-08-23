@@ -52,7 +52,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   `naive.jsonl`. Include a `reset-shards` target (drop subs, truncate
   shards, re-replicate) so the gated path starts clean — plain `down`/`up`
   keeps volumes and does NOT reset.
-- [ ] **T7 — Gated cutover.** `scripts/cutover.py`: gate write traffic at
+- [x] **T7 — Gated cutover.** `scripts/cutover.py`: gate write traffic at
   router → capture mono LSN → wait replay on both shards → flip
   `router_state.json` atomically → resume; print pause duration. Make
   target `cutover`. [D2.2]

@@ -6,7 +6,7 @@ export MONO_PORT ?= 5440
 export SHARD0_PORT ?= 5441
 export SHARD1_PORT ?= 5442
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive cutover
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -51,3 +51,6 @@ reset-shards: ## Back to baseline: mono authoritative, shards re-synced, fresh j
 
 drill-naive: ## Cut over mid-lag with no gate, decommission — count the lost writes
 	$(PY) scripts/drill_naive.py
+
+cutover: ## The gated cutover: quiesce -> LSN catch-up -> atomic flip -> resume
+	$(PY) scripts/cutover.py
