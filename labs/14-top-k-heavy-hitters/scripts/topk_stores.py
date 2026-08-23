@@ -54,7 +54,7 @@ class SpaceSaving:
         return self.counts.get(key, 0)
 
     def topk(self, k: int) -> list[tuple[int, int]]:
-        return sorted(self.counts.items(), key=lambda kv: -kv[1])[:k]
+        return sorted(self.counts.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
 
     def memory_bytes(self) -> int:
         # two dict slots of (int key, int count) at CPython's ~50B/entry

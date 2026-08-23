@@ -87,8 +87,8 @@ def main() -> int:
 
     common.append_jsonl(JOURNAL, {
         "run": "linearity", "seed": common.SEED, "n_events": N_EVENTS,
-        "n_keys": N_KEYS, "width": WIDTH, "depth": 4, "minutes": MINUTES,
-        "sketch_seed": common.SKETCH_SEED,
+        "n_keys": N_KEYS, "zipf_s": common.ZIPF_S, "width": WIDTH, "depth": 4,
+        "minutes": MINUTES, "sketch_seed": common.SKETCH_SEED,
         "vanilla_merged": merged.checksum(), "vanilla_full": full.checksum(),
         "cu_merged": cu_merged.checksum(), "cu_full": cu_full.checksum(),
         "linear_ok": linear_ok, "cu_diverges": cu_diverges,
@@ -135,6 +135,7 @@ def main() -> int:
 
     common.append_jsonl(JOURNAL, {
         "run": "trap", "k": TRAP_K, "minutes": MINUTES, "width": WIDTH,
+        "sketch_seed": common.SKETCH_SEED,
         "day_top": day_top, "naive_top": naive_top, "wide_top": wide_top,
         "steady_key": steady, "naive_misses": naive_misses, "recovered": recovered,
         "naive": naive_misses,  # the naive candidate policy is the broken run

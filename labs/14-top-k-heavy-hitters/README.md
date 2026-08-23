@@ -76,6 +76,11 @@ every one of its cells collided with elephants. Top-K makes this worse than
 point queries: it takes only a handful of inflated cold keys to evict real
 mid-rank hitters from the heap.
 
+(A cousin worth knowing but not implemented here: the **Count Sketch**
+[Charikar et al. 2002] adds a ±1 sign hash and takes the *median* instead
+of the min — unbiased, two-sided error bounded by the L2 norm instead of
+εN, which behaves much better under heavy skew at the cost of more rows.)
+
 ### The cliff, measured
 
 One seeded stream, widths halving from generous to starved
@@ -160,25 +165,31 @@ Two carefully-measured caveats:
 ### The bench: six ways to count the same stream
 
 300k events, identical stream, each contender using its own natural
-batching (`make bench`; absolute numbers vary by hardware, the shape does
-not):
+batching; the latency sample deliberately includes every batch-flushing
+event, so the p95 column shows what the batched contenders actually pay
+when the buffer drains (`make bench`; absolute numbers vary by hardware,
+the shape does not):
 
 ```
 contender           ops/s   p50 µs   p95 µs     memory recall@100
-exact              904289      0.6      1.1   5642100B      1.000
-cms                108766      6.0      7.7   2097152B      1.000
-cms_cu              92412      6.7      7.6   2097152B      1.000
-spacesaving        290293      1.5      6.1    409600B      1.000
-redis_topk         244975      0.3      1.9     49328B      1.000
-mysql_rollup        60642      0.5      2.8   7443240B      1.000
+exact             1294361      0.4      0.7   5642100B      1.000
+cms                109400      5.6      6.4   2097152B      1.000
+cms_cu              93265      6.4      7.2   2097152B      1.000
+spacesaving        291507      1.2      4.3    409600B      1.000
+redis_topk         266212      0.3  17231.6     49328B      0.990
+mysql_rollup        75350      0.4  59832.2   7443240B      1.000
 ```
 
 The dict is fastest *and* exact — at one window on one node, use it; that
 is not a concession, it is the sizing lesson. The sketches win elsewhere:
-Space-Saving does 3× CMS throughput in a fifth of the memory (pure-Python
-CMS pays 4 hashes per update), Redis holds the full answer in 49KB that
-can be shipped across a network, and MySQL — 15× slower than the dict — is
-buying durability and SQL windows, not speed. At 10B/day the arithmetic is:
+Space-Saving does ~3× CMS throughput in a fifth of the memory (pure-Python
+CMS pays 4 hashes per update), and Redis holds the full answer in 49KB that
+can be shipped across a network. Read the two batched rows carefully: p50
+is a buffered append (0.3–0.4µs) while p95 is the flush itself — 17ms for
+a 5,000-item `TOPK.ADD`, 60ms for the MySQL executemany — that is what
+"amortized" means when the batch boundary lands on your request. MySQL,
+~17× slower than the dict end-to-end, is buying durability and SQL windows,
+not speed. At 10B/day the arithmetic is:
 116k events/s sustained, so a single Space-Saving instance at bench speed
 is already within 3× of the whole feed, and per-shard sketches merged
 centrally cover it with room to spare — the merge, not the counting, is
@@ -278,5 +289,5 @@ What changes when it's 10B real views and a pager:
 | `scripts/contenders.py` | the six adapters behind one `update(key, minute_no)` / `topk(k)` interface; smoke test |
 | `scripts/drill_accuracy.py` | the width-sweep cliff + all-contender accuracy table; journals evidence for verify |
 | `scripts/drill_merge.py` | merge linearity (bit-identical), CU divergence, the cross-window trap |
-| `scripts/verify.py` | the gate: replays the stream from its seed and recomputes every invariant; `VERIFY_INVERT=1` |
+| `scripts/verify.py` | the gate: replays the stream from its journaled seeds and recomputes truth, one-sided error, the SS guarantee, the mysql match, both merges, and the trap (recall metrics are floor-checked); `VERIFY_INVERT=1` |
 | `scripts/bench.py` | six contenders, one stream: ops/s, p50/p95, memory, recall |

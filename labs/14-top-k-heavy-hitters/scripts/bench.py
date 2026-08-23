@@ -1,8 +1,10 @@
 """Benchmark all six contenders under the identical seeded stream.
 
 Reports updates/s (wall-clock over the whole stream, including each
-contender's own batching), per-update p50/p95 measured on every 1000th
-event, memory footprint, and recall@K against the exact oracle.
+contender's own batching), per-update p50/p95 sampled on every ~1000th
+event PLUS every batch-flushing event — without the latter, the batched
+contenders' tail latency would be pure list.append and structurally wrong —
+memory footprint, and recall@K against the exact oracle.
 
 Exit 0 iff structural assertions pass — never on absolute throughput:
   - every contender completes the stream and answers a full top-K
@@ -22,7 +24,7 @@ import contenders as cont
 from drill_accuracy import metrics, tie_aware_equal
 
 BENCH_EVENTS = int(common.os.environ.get("BENCH_EVENTS", "300000"))
-SAMPLE_EVERY = 1000
+SAMPLE_EVERY = 997
 
 
 def bench_one(c, stream: list[int], k: int) -> dict:
@@ -31,7 +33,8 @@ def bench_one(c, stream: list[int], k: int) -> dict:
     n = len(stream)
     for i, key in enumerate(stream):
         minute = common.minute_of(i, n)
-        if i % SAMPLE_EVERY == 0:
+        # sample the cadence AND every batch boundary: flushes are the tail
+        if i % SAMPLE_EVERY == 0 or (i + 1) % cont.MYSQL_BATCH == 0:
             s = time.perf_counter_ns()
             c.update(key, minute)
             lats.append((time.perf_counter_ns() - s) / 1000)

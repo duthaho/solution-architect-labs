@@ -174,6 +174,7 @@ def main() -> int:
         "run": "spacesaving", "contender": "spacesaving", "m": SS_M, "naive": False,
         "seed": common.SEED, "n_events": n, "k": k, **m,
         "guaranteed": len(guaranteed), "missing": len(missing),
+        "tracked": sorted(ss.store.counts.keys()),
         "evidence": tracked_ev,
     })
     print(f"{'spacesaving':<14} {'m=' + str(SS_M):>7} {m['recall']:>10.3f} "
@@ -200,6 +201,7 @@ def main() -> int:
     common.append_jsonl(JOURNAL, {
         "run": "mysql_rollup", "contender": "mysql_rollup", "naive": False,
         "seed": common.SEED, "n_events": n, "k": k, **m, "exact_match": exact_match,
+        "top": mysql_top,
     })
     print(f"{'mysql_rollup':<14} {'sql':>7} {m['recall']:>10.3f} {m['rank_overlap']:>9.3f} "
           f"{m['mean_err']:>9.1f} {m['max_err']:>8}")
