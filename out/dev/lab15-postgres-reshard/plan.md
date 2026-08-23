@@ -98,7 +98,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   verify's state-awareness [T10] handles mono-authoritative-again)),
   echo-delimited stages. [D6, AC1]
   *Verify:* `make demo` exit 0 from pristine state.
-- [ ] **T13 — Lab README.** `README.md` per repo outline (Problem →
+- [x] **T13 — Lab README.** `README.md` per repo outline (Problem →
   Architecture → Deep dives: why-not-double-writes, LSN gate, what logical
   replication doesn't carry, reverse-replication rollback → Runbook →
   Production checklist → Interview questions → File map), citing

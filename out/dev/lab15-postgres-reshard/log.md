@@ -25,3 +25,4 @@
 - 2026-08-23 · T10 verify: state-aware gate (pre-cutover/post-cutover/post-rollback/unreplicated), union checksums 32 ranges, boundaries, global uniqueness, journal replay; verified in all 3 phases incl. under live traffic; VERIFY_INVERT recounts naive damage (132 missing/291 stale), exits 1 without evidence; psycopg %%-escape fix
 - 2026-08-23 · T11 bench-index: 250k-row sync — 5.97s kept vs 3.67s copy + 0.76s rebuild; per-round DROP SUBSCRIPTION fix (orphaned slot)
 - 2026-08-23 · T12 demo: 10 stages from pristine clean, exit 0 (bench→replicate→naive+inverted gate→reset→gated cutover→verify→sequence→rollback→verify)
+- 2026-08-23 · T13 README: full deep-dive with measured numbers, cited sources, checked against Makefile targets
