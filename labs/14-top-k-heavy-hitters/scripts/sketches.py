@@ -30,16 +30,21 @@ class CountMinSketch:
         self.rows = [array("Q", [0] * width) for _ in range(depth)]
         self.total = 0
 
-    def _indexes(self, key: int) -> list[int]:
-        return [common.row_index(key, a, b, self.width) for a, b in self.params]
+    def raw_hashes(self, key: int) -> list[int]:
+        """Width-independent hash values — shareable across sketches built
+        from the same seed, so a multi-width sweep hashes each event once."""
+        return [(a * key + b) % common.MERSENNE_P for a, b in self.params]
 
     def update(self, key: int, count: int = 1) -> None:
+        self.update_hashed(self.raw_hashes(key), count)
+
+    def update_hashed(self, hashes: list[int], count: int = 1) -> None:
         self.total += count
-        idx = self._indexes(key)
         if not self.conservative:
-            for row, i in zip(self.rows, idx):
-                row[i] += count
+            for row, h in zip(self.rows, hashes):
+                row[h % self.width] += count
             return
+        idx = [h % self.width for h in hashes]
         cells = [row[i] for row, i in zip(self.rows, idx)]
         target = min(cells) + count
         for row, i, cur in zip(self.rows, idx, cells):
@@ -47,7 +52,10 @@ class CountMinSketch:
                 row[i] = target
 
     def estimate(self, key: int) -> int:
-        return min(row[i] for row, i in zip(self.rows, self._indexes(key)))
+        return self.estimate_hashed(self.raw_hashes(key))
+
+    def estimate_hashed(self, hashes: list[int]) -> int:
+        return min(row[h % self.width] for row, h in zip(self.rows, hashes))
 
     def merge(self, other: "CountMinSketch") -> "CountMinSketch":
         if (

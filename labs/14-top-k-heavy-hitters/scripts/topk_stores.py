@@ -20,21 +20,35 @@ class SpaceSaving:
         self.counts: dict[int, int] = {}
         self.errors: dict[int, int] = {}
         self.total = 0
+        # lazy min-heap over counts: a linear min() scan per eviction would
+        # be O(m) on every unseen key once full
+        self.heap: list[tuple[int, int]] = []
 
     def update(self, key: int, count: int = 1) -> None:
         self.total += count
         if key in self.counts:
-            self.counts[key] += count
-            return
-        if len(self.counts) < self.m:
+            c = self.counts[key] + count
+            self.counts[key] = c
+            heapq.heappush(self.heap, (c, key))
+        elif len(self.counts) < self.m:
             self.counts[key] = count
             self.errors[key] = 0
-            return
-        victim = min(self.counts, key=self.counts.__getitem__)
-        floor = self.counts.pop(victim)
-        self.errors.pop(victim)
-        self.counts[key] = floor + count
-        self.errors[key] = floor
+            heapq.heappush(self.heap, (count, key))
+        else:
+            self._prune()
+            floor, victim = heapq.heappop(self.heap)
+            del self.counts[victim]
+            del self.errors[victim]
+            self.counts[key] = floor + count
+            self.errors[key] = floor
+            heapq.heappush(self.heap, (floor + count, key))
+        if len(self.heap) > 16 * self.m:
+            self.heap = [(c, k) for k, c in self.counts.items()]
+            heapq.heapify(self.heap)
+
+    def _prune(self) -> None:
+        while self.heap and self.counts.get(self.heap[0][1]) != self.heap[0][0]:
+            heapq.heappop(self.heap)
 
     def estimate(self, key: int) -> int:
         return self.counts.get(key, 0)
@@ -48,34 +62,42 @@ class SpaceSaving:
 
 
 class TopKHeap:
-    """Size-k min-heap of (estimate, key) maintained alongside a sketch."""
+    """Size-k candidate set + lazy min-heap maintained alongside a sketch.
+
+    Stale heap entries are pruned on demand instead of re-heapifying per
+    update — hot keys update their estimate on every event, so an in-place
+    heap rewrite would be O(k) on the hottest path.
+    """
 
     def __init__(self, k: int, sketch: CountMinSketch):
         self.k = k
         self.sketch = sketch
+        self.est: dict[int, int] = {}
         self.heap: list[tuple[int, int]] = []
-        self.members: set[int] = set()
 
     def update(self, key: int, count: int = 1) -> None:
         self.sketch.update(key, count)
         est = self.sketch.estimate(key)
-        if key in self.members:
-            for i, (_, hk) in enumerate(self.heap):
-                if hk == key:
-                    self.heap[i] = (est, key)
-                    heapq.heapify(self.heap)
-                    break
-            return
-        if len(self.heap) < self.k:
+        if key in self.est or len(self.est) < self.k:
+            self.est[key] = est
             heapq.heappush(self.heap, (est, key))
-            self.members.add(key)
-        elif est > self.heap[0][0]:
-            _, evicted = heapq.heapreplace(self.heap, (est, key))
-            self.members.discard(evicted)
-            self.members.add(key)
+        else:
+            self._prune()
+            if est > self.heap[0][0]:
+                _, victim = heapq.heappop(self.heap)
+                del self.est[victim]
+                self.est[key] = est
+                heapq.heappush(self.heap, (est, key))
+        if len(self.heap) > 8 * self.k:
+            self.heap = [(e, m) for m, e in self.est.items()]
+            heapq.heapify(self.heap)
+
+    def _prune(self) -> None:
+        while self.heap and self.est.get(self.heap[0][1]) != self.heap[0][0]:
+            heapq.heappop(self.heap)
 
     def topk(self, k: int | None = None) -> list[tuple[int, int]]:
-        return [(key, est) for est, key in sorted(self.heap, reverse=True)][: k or self.k]
+        return sorted(self.est.items(), key=lambda kv: (-kv[1], kv[0]))[: k or self.k]
 
 
 def _selftest() -> int:
