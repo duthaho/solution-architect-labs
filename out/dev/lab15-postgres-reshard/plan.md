@@ -85,7 +85,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   `verify`, `verify-naive`. [D2.5]
   *Verify:* exit 0 happy path; `verify-naive` exit 0 against `naive.jsonl`,
   exit 1 otherwise.
-- [ ] **T11 — Index bench.** `scripts/bench_index.py`: time initial sync with
+- [x] **T11 — Index bench.** `scripts/bench_index.py`: time initial sync with
   secondary indexes kept vs dropped+rebuilt on the seeded table. Make
   target `bench-index`. [D4]
   *Verify:* bench completes and prints both timings (README cites the

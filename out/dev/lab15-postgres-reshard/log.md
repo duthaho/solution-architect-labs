@@ -23,3 +23,4 @@
   4. bonus lesson: rollback must re-sync mono's sequence above shard-minted ids (the sequence trap, mirrored) — now a rollback step
   Clean bootstrap→rollback chain: cutover 0/256 lost, rollback 0/521 lost (173 inserts), zero warnings
 - 2026-08-23 · T10 verify: state-aware gate (pre-cutover/post-cutover/post-rollback/unreplicated), union checksums 32 ranges, boundaries, global uniqueness, journal replay; verified in all 3 phases incl. under live traffic; VERIFY_INVERT recounts naive damage (132 missing/291 stale), exits 1 without evidence; psycopg %%-escape fix
+- 2026-08-23 · T11 bench-index: 250k-row sync — 5.97s kept vs 3.67s copy + 0.76s rebuild; per-round DROP SUBSCRIPTION fix (orphaned slot)

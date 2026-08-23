@@ -6,7 +6,7 @@ export MONO_PORT ?= 5440
 export SHARD0_PORT ?= 5441
 export SHARD1_PORT ?= 5442
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive cutover drill-sequence drill-rollback
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive cutover drill-sequence drill-rollback verify verify-naive bench-index
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -66,3 +66,6 @@ verify: ## Invariant gate: checksums, boundaries, uniqueness, journal replay
 
 verify-naive: ## Inverted gate: exit 0 iff the naive drill's damage is real, recounted
 	VERIFY_INVERT=1 $(PY) scripts/verify.py
+
+bench-index: ## Initial-sync time: secondary indexes kept vs dropped + rebuilt
+	$(PY) scripts/bench_index.py
