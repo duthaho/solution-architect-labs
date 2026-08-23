@@ -105,7 +105,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   Notion/Figma/Slack posts. [D6]
   *Verify:* section outline matches lab 14's; runbook commands match
   Makefile targets exactly.
-- [ ] **T14 — Repo bookkeeping.** Root `README.md` lab-table row for 15;
+- [x] **T14 — Repo bookkeeping.** Root `README.md` lab-table row for 15;
   `BACKLOG.md` P14 → ✅ Covered with lab-15 note + parked drills (A4);
   recommendation section updated. [AC7]
   *Verify:* both files render consistently (P14 mapping mentions lab 15).

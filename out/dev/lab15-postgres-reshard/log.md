@@ -26,3 +26,4 @@
 - 2026-08-23 · T11 bench-index: 250k-row sync — 5.97s kept vs 3.67s copy + 0.76s rebuild; per-round DROP SUBSCRIPTION fix (orphaned slot)
 - 2026-08-23 · T12 demo: 10 stages from pristine clean, exit 0 (bench→replicate→naive+inverted gate→reset→gated cutover→verify→sequence→rollback→verify)
 - 2026-08-23 · T13 README: full deep-dive with measured numbers, cited sources, checked against Makefile targets
+- 2026-08-23 · T14 bookkeeping: root README row 15, BACKLOG P14→Covered with parked drills, recommendation reordered
