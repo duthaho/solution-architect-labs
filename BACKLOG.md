@@ -34,7 +34,7 @@ posture, or raw throughput are tagged 🧭 — not lesser, just a different book
 | P02 | Release a DB migration with no downtime (schema + query logic change together) | Migration | ✅ Covered | **Lab 09** (expand/contract) + **Lab 02** (online big-table ALTER). Backward-compat window is exactly lab 09's thesis. |
 | P03 | Async replication: primary acks a write, crashes before replicating, replica promoted → lost row | HA / Replication | ✅ Covered | **Lab 04** measures this exact RPO window and shows semi-sync / fencing. |
 | P04 | Concurrent money transfer: balance 50k, two devices each send 50k at once → double-spend | Concurrency | ✅ Covered | **Lab 11**. Lost update reproduced deterministically; fixed four ways (`FOR UPDATE`, version column, atomic conditional `UPDATE`, append-only ledger) + deadlock drill and conservation-of-money verifier, benchmarked under hot-account contention. |
-| P05 | Top-K most-viewed products: 10M products, 10B views/day, windows per minute/day/month | Scale / Analytics | 🎯 Next up | Fits well. Count-Min Sketch + heap for approximate top-K, time-bucketed rollups, hot-key skew. Drill: exact vs approximate error under Zipfian traffic. Pairs naturally with a streaming ingest. |
+| P05 | Top-K most-viewed products: 10M products, 10B views/day, windows per minute/day/month | Scale / Analytics | ✅ Covered | **Lab 14**. Six contenders on one seeded Zipf stream (exact oracle, CMS, CMS conservative-update, Space-Saving, Redis TOPK/HeavyKeeper on core Redis 8, MySQL per-minute rollup); width-sweep drill measures the precision cliff (recall 1.000 → 0.550), merge drill proves CMS linearity bit-identically, shows CU breaking it, and reproduces the cross-window trap (day's #3 absent from every minute's top-K); verify gate replays the stream and recomputes every invariant. Parked: skew sweep, Redis restart drill. |
 | P05b | Distributed unique ID generation: short, sortable, no collision at tens of thousands tx/s | Scale / Coordination | ✅ Covered | **Lab 13**. Snowflake 41/10/12 with injectable clocks: backwards-clock drill (naive duplicates vs error/wait/hold), sequence-exhaustion drill, zombie-worker drill on MySQL-leased worker ids (SIGSTOP past TTL, id reclaimed, collision guaranteed in naive mode); benched vs UUIDv4/v7, AUTO_INCREMENT, Redis INCR + B-tree insert-locality bench. |
 | P06 | "On this day" / memories feature on a social feed, RabbitMQ, must not miss messages | Messaging / Consistency | 💡 Candidate | Overlaps **Lab 08** (idempotent processing, outbox, DLQ). Could be a lab 08 extension or a fan-out-on-schedule variant rather than a fresh lab — the "no miss message" core is already covered. Decide: extend 08 or build a scheduled-fanout lab. |
 | P07 | Inter-service read path: service A needs B's data; CUD via MQ, but reads? (avoid N+1 loops) | Architecture | 💡 Candidate | Data-replication angle (materialized read model via CDC) is on-theme and overlaps **Lab 03**. The pure "how do services talk" part (API composition, BFF, caching) is more architecture than data-infra. Frame narrowly as "local read replica via events" to fit. |
@@ -54,16 +54,19 @@ posture, or raw throughput are tagged 🧭 — not lesser, just a different book
 ## What to build next (recommendation)
 
 The remaining problems in the repo's core, in rough priority order (P04
-shipped as **lab 11**, P13 as **lab 12**, P05b as **lab 13**):
+shipped as **lab 11**, P13 as **lab 12**, P05b as **lab 13**, P05 as
+**lab 14**):
 
-1. **P05 — Top-K at scale.** Introduces approximate data structures and
-   streaming ingest, a new flavor for the repo; pairs with lab 13's hot-key
-   theme.
+1. **P14 — Live Postgres resharding.** The strongest big-build candidate now
+   that the smaller labs have shipped — the "lab 09 boss level" with
+   published Notion/Figma sources.
+2. **P15 / P16 / P18** are solid bench players with published sources; P16
+   (hot partition + request coalescing) pairs with lab 14's hot-key theme,
+   and P18 is lab 14's money-grade cousin (same ingest, opposite accuracy
+   contract).
 
 `P06`/`P07`/`P17` are better handled by **extending labs 08 / 03** than by new
-labs — worth a note so they don't get built twice. `P14` (live resharding) is
-the strongest big-build candidate once the smaller labs ship, and `P15`/`P16`/
-`P18` are solid bench players with published sources.
+labs — worth a note so they don't get built twice.
 
 Everything tagged 🧭 (P08–P12) is deliberately **out of scope for now**: real
 problems, but building them here dilutes the repo's data-infrastructure
