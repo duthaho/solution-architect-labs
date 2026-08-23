@@ -22,3 +22,4 @@
   3. router raced gate flips twice (op type then node computed from different snapshots) — route_write() now returns node+state from one post-gate snapshot; reset-shards also restarts shard seqs (truncate keeps them)
   4. bonus lesson: rollback must re-sync mono's sequence above shard-minted ids (the sequence trap, mirrored) — now a rollback step
   Clean bootstrap→rollback chain: cutover 0/256 lost, rollback 0/521 lost (173 inserts), zero warnings
+- 2026-08-23 · T10 verify: state-aware gate (pre-cutover/post-cutover/post-rollback/unreplicated), union checksums 32 ranges, boundaries, global uniqueness, journal replay; verified in all 3 phases incl. under live traffic; VERIFY_INVERT recounts naive damage (132 missing/291 stale), exits 1 without evidence; psycopg %%-escape fix

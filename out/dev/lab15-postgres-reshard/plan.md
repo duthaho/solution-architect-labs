@@ -75,7 +75,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   roll back (gate → wait reverse LSN → flip routing back); prove all N
   exist on mono. Make target `drill-rollback`. [D2.4]
   *Verify:* all post-cutover acked writes present on mono after rollback.
-- [ ] **T10 — Verify gate.** `scripts/verify.py`: **state-aware** — reads
+- [x] **T10 — Verify gate.** `scripts/verify.py`: **state-aware** — reads
   `router_state.json` to know who's authoritative. Row counts + per-range
   ordered-row md5 checksums comparing the *union of shard partitions*
   against mono (never per-shard vs whole-mono), plus routing-boundary check

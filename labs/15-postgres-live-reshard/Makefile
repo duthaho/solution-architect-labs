@@ -60,3 +60,9 @@ drill-sequence: ## Sequences don't replicate: the silent duplicate, the setval t
 
 drill-rollback: ## Roll back AFTER the cutover via the reverse stream — prove nothing lost
 	$(PY) scripts/drill_rollback.py
+
+verify: ## Invariant gate: checksums, boundaries, uniqueness, journal replay
+	$(PY) scripts/verify.py
+
+verify-naive: ## Inverted gate: exit 0 iff the naive drill's damage is real, recounted
+	VERIFY_INVERT=1 $(PY) scripts/verify.py
