@@ -6,7 +6,7 @@ export MONO_PORT ?= 5440
 export SHARD0_PORT ?= 5441
 export SHARD1_PORT ?= 5442
 
-.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status
+.PHONY: help up down clean install bootstrap seed traffic-start traffic-stop replicate replicate-status reset-shards drill-naive
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -45,3 +45,9 @@ replicate: ## Create row-filtered publications + subscriptions, wait for initial
 
 replicate-status: ## Per-shard replication state, lag, and row counts
 	$(PY) scripts/replicate.py status
+
+reset-shards: ## Back to baseline: mono authoritative, shards re-synced, fresh journal
+	$(PY) scripts/replicate.py reset
+
+drill-naive: ## Cut over mid-lag with no gate, decommission — count the lost writes
+	$(PY) scripts/drill_naive.py

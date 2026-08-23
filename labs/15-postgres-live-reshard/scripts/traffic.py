@@ -78,10 +78,13 @@ class Traffic:
         )
         self.acked += 1
 
-    def run(self):
-        deadline = time.monotonic() + TRAFFIC_SECONDS if TRAFFIC_SECONDS else None
-        log.info("traffic started (sleep=%s, seconds=%s)", RATE_SLEEP, TRAFFIC_SECONDS or "∞")
-        while not _stop and (deadline is None or time.monotonic() < deadline):
+    def run(self, stop_event=None, seconds=None):
+        seconds = TRAFFIC_SECONDS if seconds is None else seconds
+        deadline = time.monotonic() + seconds if seconds else None
+        log.info("traffic started (sleep=%s, seconds=%s)", RATE_SLEEP, seconds or "∞")
+        while not _stop and not (stop_event and stop_event.is_set()) and (
+            deadline is None or time.monotonic() < deadline
+        ):
             try:
                 self.one_op()
             except KeyboardInterrupt:

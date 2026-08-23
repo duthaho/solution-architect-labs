@@ -1,7 +1,11 @@
 import sys
 import time
 
-from common import N_SHARDS, SHARDS, conn, container_dsn, log, shard_filter
+from bootstrap import drop_replication
+from common import (
+    JOURNAL, N_SHARDS, SHARDS, conn, container_dsn, log, shard_filter,
+    write_router_state,
+)
 
 
 def setup():
@@ -80,12 +84,31 @@ def status():
     print(f"rows: {counts} (shard sum = {sum(v for k, v in counts.items() if k != 'mono')})")
 
 
+def reset():
+    """Back to the pre-cutover baseline: mono authoritative, shards emptied
+    and re-synced from scratch, fresh journal epoch."""
+    write_router_state({"authoritative": "mono", "writes_gated": False})
+    for node in ["mono"] + SHARDS:
+        with conn(node) as c:
+            drop_replication(c)
+    for shard in SHARDS:
+        with conn(shard) as c:
+            c.execute("TRUNCATE docs")
+    JOURNAL.unlink(missing_ok=True)
+    log.info("shards truncated, replication cleared, journal reset — re-establishing")
+    setup()
+    wait_initial_sync()
+    log.info("baseline restored: mono authoritative, shards in sync")
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "setup"
     if cmd == "setup":
         setup()
         wait_initial_sync()
         log.info("forward replication established, initial sync complete")
+    elif cmd == "reset":
+        reset()
     elif cmd == "status":
         status()
     elif cmd == "wait-lsn":

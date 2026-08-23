@@ -43,7 +43,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   `replicate`, `replicate-status`. [D2.2, D5]
   *Verify:* under live traffic, shard counts converge; `wait-lsn` returns
   only when `replay_lsn` passes captured LSN.
-- [ ] **T6 — Naive cutover drill.** `scripts/drill_naive.py`: under traffic,
+- [x] **T6 — Naive cutover drill.** `scripts/drill_naive.py`: under traffic,
   flip routing to shards *without* quiesce/LSN gate (optionally with an
   injected replication stall for determinism — disable subscription
   momentarily), then count journaled-acked rows missing/stale on shards.
