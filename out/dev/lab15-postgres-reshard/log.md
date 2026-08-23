@@ -10,3 +10,4 @@
   - Sequences confirmed not replicated (subscriber seq last_value=1 with 600 rows) — T8 premise holds.
   - Plan deltas: T3 schema gets the composite unique index + REPLICA IDENTITY USING INDEX in bootstrap (before any pub); T5 wait-lsn uses publisher replay_lsn; T13 README deep-dive gains the replica-identity trap.
 - 2026-08-23 · T2 scaffold: compose (3× postgres:17.11, wal_level=logical, healthchecks), Makefile skeleton, psycopg 3.2.10 pinned; up→healthy, clean→pristine verified
+- 2026-08-23 · T3 schema+common+bootstrap: docs table, shardkey unique index + REPLICA IDENTITY USING INDEX verified on all 3 nodes via \d docs

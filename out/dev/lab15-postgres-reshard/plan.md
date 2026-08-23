@@ -20,7 +20,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   (`help/up/down/clean/install`), `requirements.txt` (pinned psycopg),
   `.gitignore`. [D5, D6, A1]
   *Verify:* `make up` → all 3 healthy; `make clean` pristine.
-- [ ] **T3 — Schema + common.** `sql/schema.sql` (single `docs` table, serial
+- [x] **T3 — Schema + common.** `sql/schema.sql` (single `docs` table, serial
   PK, `workspace_id int NOT NULL`, payload, `updated_at`, **plus unique index
   `(workspace_id, id)` + `REPLICA IDENTITY USING INDEX` — required before any
   pub/sub exists, on all 3 nodes; see T1 findings**), `scripts/common.py`
