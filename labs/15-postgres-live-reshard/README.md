@@ -94,6 +94,14 @@ keepalives and passes the gate. Gate on the publisher's view
 ([PG docs — monitoring][pgm]); it is also the one place that sees all
 subscribers at once.
 
+One honesty note on the quiesce itself: this lab drains in-flight writes by
+watching the ack journal go quiet — observation, not a hard barrier. A
+client that routed just before the gate and stalls long enough could still
+commit late; the audit would *catch* that loss loudly rather than miss it,
+but preventing it outright needs the production-grade stop: PgBouncer
+`PAUSE` plus `REVOKE` on the old primary, which is exactly what Figma ran
+(and this lab parks as a variant).
+
 ### The replica-identity landmine
 
 A row-filtered publication that publishes `UPDATE`/`DELETE` requires the

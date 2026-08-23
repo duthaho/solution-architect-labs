@@ -1,7 +1,7 @@
 import sys
 import time
 
-from bootstrap import drop_replication
+from bootstrap import clear_replication
 from common import (
     JOURNAL, N_SHARDS, SHARDS, conn, container_dsn, log, shard_filter,
     write_router_state,
@@ -88,9 +88,7 @@ def reset():
     """Back to the pre-cutover baseline: mono authoritative, shards emptied
     and re-synced from scratch, fresh journal epoch."""
     write_router_state({"authoritative": "mono", "writes_gated": False})
-    for node in ["mono"] + SHARDS:
-        with conn(node) as c:
-            drop_replication(c)
+    clear_replication(["mono"] + SHARDS)
     for shard in SHARDS:
         with conn(shard) as c:
             c.execute("TRUNCATE docs")

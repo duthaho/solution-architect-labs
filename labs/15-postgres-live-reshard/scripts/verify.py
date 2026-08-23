@@ -9,7 +9,7 @@ recounted damage — proof the gate catches what the naive cutover does."""
 import os
 
 from common import (
-    JOURNAL, LAB_DIR, N_SHARDS, SHARDS, conn, log, read_jsonl,
+    JOURNAL, LAB_DIR, N_SHARDS, SHARDS, conn, drain_writes, log, read_jsonl,
     read_router_state, shard_filter, write_router_state,
 )
 from drill_naive import audit as audit_on_shards
@@ -117,8 +117,7 @@ def gated(fn):
     state["writes_gated"] = True
     write_router_state(state)
     try:
-        import time
-        time.sleep(0.3)
+        drain_writes()
         fn(state)
     finally:
         state["writes_gated"] = False
@@ -152,6 +151,12 @@ def verify():
                 union_checksums_against("mono")
             check_boundaries()
             check_global_uniqueness()
+        else:
+            # post-rollback / unreplicated: mono legitimately diverges ahead,
+            # so mono-vs-shards comparisons prove nothing — but the retired
+            # shards still owe their own invariants
+            check_boundaries()
+            check_global_uniqueness()
         check_journal(state)
 
     gated(run)
@@ -164,26 +169,35 @@ def verify():
 
 
 def verify_invert():
-    """Exit 0 iff the naive drill's journaled damage is real when recounted."""
+    """Exit 0 iff the naive drill's journaled damage is real — recounted
+    against the shards themselves, not the drill's own summary. Run it while
+    the naive damage is still live (the demo does: naive → this → reset)."""
     records = read_jsonl(NAIVE)
     details = [r for r in records if not r.get("summary")]
     summaries = [r for r in records if r.get("summary")]
-    ok = (
+    consistent = (
         len(summaries) == 1
         and summaries[0]["missing"] == sum(1 for d in details if d["damage"] == "missing")
         and summaries[0]["stale"] == sum(1 for d in details if d["damage"] == "stale")
-        and summaries[0]["missing"] >= 1
-        and summaries[0]["stale"] >= 1
         and all(d.get("id") and d.get("rev") and d.get("node") == "mono" for d in details)
     )
-    if not ok:
-        print("❌ INVERTED GATE FAILED: naive.jsonl does not document real, "
+    if not consistent or not details:
+        print("❌ INVERTED GATE FAILED: naive.jsonl does not document "
               "recountable acked-write damage")
+        raise SystemExit(1)
+    recount = audit_on_shards(details)
+    still_damaged = {(d["ws"], d["id"]) for d in recount}
+    claimed = {(d["ws"], d["id"]) for d in details}
+    if len(recount) < 1 or still_damaged != claimed:
+        print(f"❌ INVERTED GATE FAILED: the databases do not confirm the claimed "
+              f"damage ({len(recount)} of {len(details)} records verify against the "
+              f"shards) — stale or fabricated evidence, or the state was already reset")
         raise SystemExit(1)
     s = summaries[0]
     print(f"✅ inverted gate: the naive cutover really did damage acked writes "
           f"({s['missing']} missing, {s['stale']} stale of {s['acked_in_window']} "
-          f"in the lag window) — recounted from the record, not trusted")
+          f"in the lag window) — all {len(recount)} recounted against the shards, "
+          f"not trusted from the record")
 
 
 def main():

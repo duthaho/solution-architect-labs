@@ -28,3 +28,12 @@
 - 2026-08-23 · T13 README: full deep-dive with measured numbers, cited sources, checked against Makefile targets
 - 2026-08-23 · T14 bookkeeping: root README row 15, BACKLOG P14→Covered with parked drills, recommendation reordered
 - 2026-08-23 · T15 final E2E: demo+verify exit 0 in 78s from pristine clean; naive 424 damaged vs gated 0 (703ms pause), rollback 0 lost (393ms), bench 5.89s vs 4.13s+rebuild; clean→0 containers 0 artifacts. All ACs met.
+- 2026-08-23 · done gate: FIX FIRST → 7 accepted findings from 3 reviewers (2 fresh sub-agents + codex), all fixed and re-verified:
+  1. two-pass replication teardown (subs everywhere first, then pubs+slots) — reset-shards/bootstrap/bench no longer orphan mono's slots; repro `replicate→reset-shards` now passes
+  2. cutover/rollback gate under try/finally + cutover preconditions — double-cutover fails fast, gate never wedges
+  3. blind 0.3s drain → journal-quiescence drain + README honesty note (residual TOCTOU is detected-not-silent; hard barrier = parked PgBouncer variant)
+  4. VERIFY_INVERT recounts all damage against the shards (425/425), missing≥1∧stale≥1 over-strictness dropped
+  5. post-rollback verify now runs boundaries + global uniqueness (mono-vs-shards comparisons stay excluded by design)
+  6. dead TRAFFIC_FORCE_INSERTS removed
+  7. spec amended: D2.3 interleaved-sequences amendment, D2.5 dark-reads subsumption
+  Rejected: spec-OOS 1–4 (correctness-forced, logged at the time). Re-ran affected gate lines + full demo: exit 0 in 79s, clean pristine.

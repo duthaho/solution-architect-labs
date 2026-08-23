@@ -25,11 +25,19 @@ pains"/"Lived to tell the scale", Postgres logical-replication docs.
      resume; prove zero acked-write loss, measure pause duration.
   3. `drill-sequence` — serial PK collides on the new shard after split
      (sequences don't replicate); fix with `setval()` re-seeding.
+     *(Amended during T8/T9, recorded in log.md: `setval(max)` alone still
+     lets two writable shards mint the same ids, which breaks the reverse
+     replication D2.4 depends on — the shipped drill demonstrates `setval`
+     as the trap and fixes with interleaved sequences, disjoint parity.)*
   4. `drill-rollback` — start reverse publication new→old right after cutover,
      take writes on new, roll back, prove post-cutover writes survived on old.
   5. `verify` — independent gate: row counts + per-range ordered-row checksums
      + sampled dark reads (with replication-wait), replayed from journals;
      `VERIFY_INVERT=1` proves the gate catches the naive drill's damage.
+     *(Amended at the done gate: sampled dark reads are subsumed by a FULL
+     journal replay — every acked write dark-read against the authoritative
+     side — plus full-range checksums under a drained write gate; and
+     `VERIFY_INVERT` recounts the damage against the shards themselves.)*
 - **D3** Routing = app-side shard map (Notion-style): Python router, atomic
   rename on a routing-state JSON; pause = router-level write gate. No
   PgBouncer container.

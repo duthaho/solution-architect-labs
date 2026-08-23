@@ -8,7 +8,6 @@ from router import Router
 
 RATE_SLEEP = float(os.environ.get("TRAFFIC_SLEEP", "0.005"))
 TRAFFIC_SECONDS = float(os.environ.get("TRAFFIC_SECONDS", "0"))
-FORCE_INSERTS = os.environ.get("TRAFFIC_FORCE_INSERTS") == "1"
 
 _stop = False
 
@@ -46,11 +45,7 @@ class Traffic:
         # "frozen until sequences fixed" rule unless a drill forces them.
         # Node and state come from one post-gate snapshot: an op that entered
         # the gate must not exit routed by the pre-flip world.
-        insert_ok = (
-            state["authoritative"] == "mono"
-            or state.get("sequences_fixed")
-            or FORCE_INSERTS
-        )
+        insert_ok = state["authoritative"] == "mono" or state.get("sequences_fixed")
         do_insert = want_insert and insert_ok
         if do_insert:
             c = self._conn(node)

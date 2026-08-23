@@ -68,6 +68,24 @@ def write_router_state(state):
     tmp.rename(ROUTER_STATE)
 
 
+def drain_writes(settle=0.4, timeout=5.0):
+    """After gating, wait until the journal stops growing: acked writes are
+    journaled post-commit, so a quiet journal means in-flight ops have
+    landed. Observation, not a hard barrier — the production-grade stop is
+    PgBouncer PAUSE + REVOKE (see README) — but it beats a blind sleep."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    last = -1
+    while time.monotonic() < deadline:
+        size = JOURNAL.stat().st_size if JOURNAL.exists() else 0
+        if size == last:
+            return
+        last = size
+        time.sleep(settle)
+    log.warning("journal still growing after %.1fs — a writer is ignoring the gate", timeout)
+
+
 def append_jsonl(path, record):
     with open(path, "a") as f:
         f.write(json.dumps(record) + "\n")

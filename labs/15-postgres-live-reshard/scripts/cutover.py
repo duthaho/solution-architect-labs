@@ -7,7 +7,10 @@ and the same audit that condemned the naive flip proves it."""
 import threading
 import time
 
-from common import JOURNAL, SHARDS, conn, container_dsn, log, read_jsonl, write_router_state
+from common import (
+    JOURNAL, SHARDS, conn, container_dsn, drain_writes, log, read_jsonl,
+    read_router_state, write_router_state,
+)
 from drill_naive import audit
 from replicate import capture_lsn, wait_for_lsn
 from traffic import Traffic
@@ -30,18 +33,39 @@ def flip_replication_streams():
             )
 
 
+def check_preconditions():
+    if read_router_state()["authoritative"] != "mono":
+        raise SystemExit("cutover requires mono authoritative — already cut over? "
+                         "(make reset-shards to rebuild the baseline)")
+    for i, shard in enumerate(SHARDS):
+        with conn(shard) as c:
+            if not c.execute(
+                "SELECT 1 FROM pg_subscription WHERE subname = %s", (f"sub_shard{i}",)
+            ).fetchone():
+                raise SystemExit(f"forward replication missing on {shard} — run `make replicate`")
+
+
 def gated_cutover():
+    check_preconditions()
     t0 = time.monotonic()
     log.info("gate: pausing writes at the router")
     write_router_state({"authoritative": "mono", "writes_gated": True})
-    time.sleep(0.3)  # in-flight acked writes land before the LSN capture
+    try:
+        drain_writes()  # in-flight acked writes land before the LSN capture
 
-    lsn = capture_lsn()
-    log.info("quiesced; captured mono LSN %s — waiting for both shards", lsn)
-    wait_for_lsn(lsn)
-    log.info("both shards replayed past %s — flipping replication streams", lsn)
-    flip_replication_streams()
-    log.info("reverse replication armed (shards -> mono) — flipping routing")
+        lsn = capture_lsn()
+        log.info("quiesced; captured mono LSN %s — waiting for both shards", lsn)
+        wait_for_lsn(lsn)
+        log.info("both shards replayed past %s — flipping replication streams", lsn)
+        flip_replication_streams()
+        log.info("reverse replication armed (shards -> mono) — flipping routing")
+    except BaseException:
+        # never leave the gate wedged: writes resume against mono, and
+        # `make reset-shards` recovers whatever half-state the failure left
+        write_router_state({"authoritative": "mono", "writes_gated": False})
+        log.error("cutover FAILED — gate released, mono still authoritative; "
+                  "run `make reset-shards` before retrying")
+        raise
 
     write_router_state({"authoritative": "shards", "writes_gated": False})
     pause = time.monotonic() - t0

@@ -6,7 +6,10 @@ and prove every write the shards ever acked survived the return."""
 import threading
 import time
 
-from common import JOURNAL, SHARDS, conn, log, read_jsonl, read_router_state, write_router_state
+from common import (
+    JOURNAL, SHARDS, conn, drain_writes, log, read_jsonl, read_router_state,
+    write_router_state,
+)
 from replicate import wait_for_lsn
 from traffic import Traffic
 
@@ -34,23 +37,31 @@ def rollback():
     state = read_router_state()
     state["writes_gated"] = True
     write_router_state(state)
-    time.sleep(0.3)
+    try:
+        drain_writes()
 
-    for i, shard in enumerate(SHARDS):
-        with conn(shard) as c:
-            lsn = c.execute("SELECT pg_current_wal_lsn()").fetchone()[0]
-        log.info("%s quiesced at %s — waiting for mono to replay past it", shard, lsn)
-        wait_for_lsn(lsn, publisher=shard, subs=[f"sub_back{i}"])
+        for i, shard in enumerate(SHARDS):
+            with conn(shard) as c:
+                lsn = c.execute("SELECT pg_current_wal_lsn()").fetchone()[0]
+            log.info("%s quiesced at %s — waiting for mono to replay past it", shard, lsn)
+            wait_for_lsn(lsn, publisher=shard, subs=[f"sub_back{i}"])
 
-    # The sequence trap, mirrored: the shards minted ids mono's sequence has
-    # never seen — reverse-applied rows sit ABOVE it, and mono's next inserts
-    # would walk straight into them. Re-syncing the sequence is as much a part
-    # of rollback as the routing flip.
-    with conn("mono") as c:
-        new_max = c.execute(
-            "SELECT setval('docs_id_seq', (SELECT max(id) FROM docs))"
-        ).fetchone()[0]
-    log.info("mono docs_id_seq re-synced to %d (above every shard-minted id)", new_max)
+        # The sequence trap, mirrored: the shards minted ids mono's sequence
+        # has never seen — reverse-applied rows sit ABOVE it, and mono's next
+        # inserts would walk straight into them. Re-syncing the sequence is as
+        # much a part of rollback as the routing flip.
+        with conn("mono") as c:
+            new_max = c.execute(
+                "SELECT setval('docs_id_seq', (SELECT max(id) FROM docs))"
+            ).fetchone()[0]
+        log.info("mono docs_id_seq re-synced to %d (above every shard-minted id)", new_max)
+    except BaseException:
+        # gate must never stay wedged: shards remain authoritative, writes
+        # resume, and the reverse stream keeps feeding mono for the next try
+        state["writes_gated"] = False
+        write_router_state(state)
+        log.error("rollback FAILED — gate released, shards still authoritative")
+        raise
 
     log.info("mono has replayed everything both shards ever acked — flipping home")
     write_router_state({"authoritative": "mono", "writes_gated": False})

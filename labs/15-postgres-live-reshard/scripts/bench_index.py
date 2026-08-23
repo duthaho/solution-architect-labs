@@ -7,7 +7,7 @@ Final stage: this bench tears down whatever replication exists and leaves
 shard0 empty — run `make reset-shards` afterwards to rebuild the baseline."""
 import time
 
-from bootstrap import drop_replication
+from bootstrap import clear_replication
 from common import SHARDS, conn, container_dsn, log, shard_filter
 
 SECONDARY_INDEXES = {
@@ -18,7 +18,6 @@ SECONDARY_INDEXES = {
 
 def reset_target():
     with conn("shard0") as c:
-        drop_replication(c)
         c.execute("TRUNCATE docs")
         c.execute("ALTER SEQUENCE docs_id_seq RESTART WITH 1 INCREMENT BY 1")
         for name, ddl in SECONDARY_INDEXES.items():
@@ -69,8 +68,8 @@ def one_round(drop_indexes):
 
 def main():
     global EXPECTED
+    clear_replication(["mono"] + SHARDS)
     with conn("mono") as c:
-        drop_replication(c)
         c.execute(f"CREATE PUBLICATION pub_bench FOR TABLE docs WHERE {shard_filter(0)}")
         EXPECTED = c.execute(
             f"SELECT count(*) FROM docs WHERE {shard_filter(0)}"
