@@ -1,0 +1,23 @@
+# Log — lab 11 concurrent transfers
+
+- 2026-08-19 · spec · approved by user (interview: 4 strategies + SERIALIZABLE-as-text, deadlock drill, bench included) · —
+- 2026-08-19 · plan · drafted from lab-10 template; codex cross-review returned 6 findings (F1 nondeterministic race, F2 ledger opening entries, F3 missing transfer_id join key, F4 demo contamination order, F5 journal scope across reseeds, F6 MySQL 8 enforces CHECK) — all folded into plan before approval · —
+- 2026-08-19 · plan · approved by user · —
+- 2026-08-19 · T1 scaffold · make up install green (lab11-mysql healthy) · 8fea65f
+- 2026-08-19 · T2 schema+common+bootstrap · 4 tables live; fix: strip SQL comments before splitting on ';' · 9051b7f
+- 2026-08-19 · T3 seed · accounts/entries/cache all 10000.00; seed.json baseline · c070b23
+- 2026-08-19 · T4 harness+naive · 3/3 runs violate (drift +1764/+154/+149); design note: distinct per-worker amounts+dst needed — symmetric lost updates conserve SUM and hide the bug · eea5ba0
+- 2026-08-19 · T5 strategy a · conserved (drift 0), rejects=insufficient only · 35b9d42
+- 2026-08-19 · T6 strategy b · conserved, 265 retries under contention (bench story) · f6de90c
+- 2026-08-19 · T7 strategy c · conserved, fastest so far (0.5s wall), rejects=insufficient · cc397a2
+- 2026-08-19 · T8 strategy d · conserved, cache==SUM(entries) for all accounts · b590459
+- 2026-08-19 · T9 deadlock drill · arrival order 10/10 deadlocks, sorted 0/20 · 61af835
+- 2026-08-19 · T10 verify.py · 13 PASS post-strategies (exit 0); post-naive 2 FAIL (exit 1, inverted by verify-naive) · f08f0df
+- 2026-08-19 · T11 bench · 11.5s: a=114 ops/s, b=76 (858 retries), c=119, d=93; all conserved · ad343b4
+- 2026-08-19 · T12 demo · pristine→green in 43s; fix: deadlock drill moved before reseed (journals nothing, would break verify) · 768bafa
+- 2026-08-19 · T13 README · 7 sections, all runbook targets verified against Makefile · 4715184
+- 2026-08-19 · T14 bookkeeping · root README row + BACKLOG P04 ✅ (incl. next-up recommendation refresh) · 2d375ce
+- 2026-08-19 · T15 e2e · from pristine: `make demo` exit 0 in 37.7s ("VERDICT: CONSERVATION VIOLATED…naive" → "verify FAILED as expected" → deadlock verdict → 4× "money conserved" → "VERDICT: all invariants hold" → bench table, all conserved=yes); `make verify` exit 0; `make clean` → no jsonl/json/pid/log, volumes gone, containers gone · —
+- 2026-08-19 · done gate #1 · FIX FIRST: 7 accepted (2 Claude-review MED, 3 codex, 1 spec D4, 1 LOW), 5 rejected with reasons; no cross-model rejection · —
+- 2026-08-19 · T16 gate fixes · all 7 fixed and re-gated: repeat-run verify holds (2x MODE=a, 147 acked), standalone deadlock+verify holds (balances restored), naive 3/3 violates with read→write rendezvous (faster too: 0.6s), HOT=1 exits 1, DB-down exits 1, full demo 40.8s exit 0, bench has deadlocks column; README samples refreshed from real output (caught myself pasting an invented drift number — replaced with the quoted one) · —
+- 2026-08-19 · done gate #2 · re-gate green → VERDICT: SHIP · f8203ba

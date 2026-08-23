@@ -14,7 +14,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   subscription in the other direction after dropping the forward one. Record
   findings in `log.md`; delete spike files. [D5]
   *Verify:* each mechanism shown working via psql output.
-- [ ] **T2 — Scaffold.** `labs/15-postgres-live-reshard/`: `docker-compose.yml`
+- [x] **T2 — Scaffold.** `labs/15-postgres-live-reshard/`: `docker-compose.yml`
   (lab15-mono/shard0/shard1, postgres:17 pinned, `wal_level=logical`,
   healthchecks, named volumes, `PG_PORT`-style env ports), `Makefile`
   (`help/up/down/clean/install`), `requirements.txt` (pinned psycopg),

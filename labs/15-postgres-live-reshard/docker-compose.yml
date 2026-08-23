@@ -1,0 +1,65 @@
+services:
+  # The overloaded monolith: source of truth until the cutover.
+  mono:
+    image: postgres:17.11
+    container_name: lab15-mono
+    command:
+      - -c
+      - wal_level=logical
+    environment:
+      - POSTGRES_PASSWORD=lab
+      - POSTGRES_DB=lab15
+    ports:
+      - "${MONO_PORT:-5440}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lab15"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - monodata:/var/lib/postgresql/data
+
+  # The two shards. Plain Postgres: logical replication moves the data,
+  # the app-side router (scripts/router.py) decides who owns what.
+  shard0:
+    image: postgres:17.11
+    container_name: lab15-shard0
+    command:
+      - -c
+      - wal_level=logical
+    environment:
+      - POSTGRES_PASSWORD=lab
+      - POSTGRES_DB=lab15
+    ports:
+      - "${SHARD0_PORT:-5441}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lab15"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - shard0data:/var/lib/postgresql/data
+
+  shard1:
+    image: postgres:17.11
+    container_name: lab15-shard1
+    command:
+      - -c
+      - wal_level=logical
+    environment:
+      - POSTGRES_PASSWORD=lab
+      - POSTGRES_DB=lab15
+    ports:
+      - "${SHARD1_PORT:-5442}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "lab15"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    volumes:
+      - shard1data:/var/lib/postgresql/data
+
+volumes:
+  monodata:
+  shard0data:
+  shard1data:
