@@ -27,7 +27,8 @@ class ExactDict:
         self.counts[key] += 1
 
     def topk(self, k: int | None = None) -> list[tuple[int, int]]:
-        return self.counts.most_common(k or self.k)
+        # not most_common(): ties must break deterministically, by key
+        return sorted(self.counts.items(), key=lambda kv: (-kv[1], kv[0]))[: k or self.k]
 
     def memory_bytes(self) -> int:
         return len(self.counts) * 100
