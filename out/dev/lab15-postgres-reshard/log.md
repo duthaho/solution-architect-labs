@@ -27,3 +27,4 @@
 - 2026-08-23 · T12 demo: 10 stages from pristine clean, exit 0 (bench→replicate→naive+inverted gate→reset→gated cutover→verify→sequence→rollback→verify)
 - 2026-08-23 · T13 README: full deep-dive with measured numbers, cited sources, checked against Makefile targets
 - 2026-08-23 · T14 bookkeeping: root README row 15, BACKLOG P14→Covered with parked drills, recommendation reordered
+- 2026-08-23 · T15 final E2E: demo+verify exit 0 in 78s from pristine clean; naive 424 damaged vs gated 0 (703ms pause), rollback 0 lost (393ms), bench 5.89s vs 4.13s+rebuild; clean→0 containers 0 artifacts. All ACs met.

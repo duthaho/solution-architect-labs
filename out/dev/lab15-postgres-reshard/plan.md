@@ -109,7 +109,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   `BACKLOG.md` P14 → ✅ Covered with lab-15 note + parked drills (A4);
   recommendation section updated. [AC7]
   *Verify:* both files render consistently (P14 mapping mentions lab 15).
-- [ ] **T15 — End-to-end check (spec's final gate).**
+- [x] **T15 — End-to-end check (spec's final gate).**
   `make -C labs/15-postgres-live-reshard demo && make -C labs/15-postgres-live-reshard verify`
   from a clean checkout state, then `make clean` leaves machine pristine.
   [AC1–AC7]
