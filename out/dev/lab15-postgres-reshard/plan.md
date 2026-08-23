@@ -58,7 +58,7 @@ independent verify gate. "Red" per task = reproduce the failure/absence first
   target `cutover`. [D2.2]
   *Verify:* under traffic, 0 journaled-acked rows missing after cutover;
   pause duration printed (expect low seconds).
-- [ ] **T8 — Sequence drill.** `scripts/drill_sequence.py`: post-cutover
+- [x] **T8 — Sequence drill.** `scripts/drill_sequence.py`: post-cutover
   insert on shards using the serial PK → duplicate-key error (sequences
   don't replicate); fix = **interleaved sequences** (`ALTER SEQUENCE …
   INCREMENT 2`, shard0 odd / shard1 even, restarted above `max(id)`) so the

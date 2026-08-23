@@ -42,7 +42,12 @@ class Traffic:
         # post-cutover sequence fix (drill_sequence) the shard sequences
         # collide with existing ids, so inserts stay on the runbook's
         # "frozen until sequences fixed" rule unless a drill forces them.
-        insert_ok = read_router_state()["authoritative"] == "mono" or FORCE_INSERTS
+        state = read_router_state()
+        insert_ok = (
+            state["authoritative"] == "mono"
+            or state.get("sequences_fixed")
+            or FORCE_INSERTS
+        )
         do_insert = insert_ok and self.rng.random() < 0.3
         if do_insert:
             node = self.router.node_for_write(ws)

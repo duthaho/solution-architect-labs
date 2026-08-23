@@ -15,3 +15,4 @@
 - 2026-08-23 · T5 replicate.py: row-filtered pubs+subs, initial 500k sync ~7s under traffic, wait-lsn gate (publisher replay_lsn) ~120ms; counts converge
 - 2026-08-23 · T6 drill-naive: 405 acked writes damaged (128 missing / 277 stale) via injected stall + ungated flip + decommission; reset-shards restores exact baseline
 - 2026-08-23 · T7 gated cutover: 439ms pause, 0/246 acked writes lost under live traffic
+- 2026-08-23 · T8 drill-sequence: silent global dup (shard0 id=1) + loud dup-key (shard1) + setval trap + interleaved fix (disjoint parity, 20 inserts). Design correction for T9: reverse stream must be created INSIDE the cutover gate (drop forward subs first — loop risk; gap risk otherwise)
